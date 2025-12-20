@@ -13,7 +13,16 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.maxwell-young.network-1010",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Discover nearby 1010 devices for local pairing.",
+        "NSLocalNetworkUsageDescription": "Find nearby 1010 devices over the local network.",
+        "NSBonjourServices": [
+          "_n1010mesh._tcp"
+        ],
+        "NSNearbyInteractionUsageDescription": "Sense nearby 1010 devices for proximity effects."
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -7,6 +7,10 @@ import Constants from 'expo-constants';
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || 'https://your-project.supabase.co';
 const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || 'your-anon-key';
 
+export const isSupabaseConfigured =
+    !supabaseUrl.includes('your-project.supabase.co') &&
+    supabaseAnonKey !== 'your-anon-key';
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
         storage: {

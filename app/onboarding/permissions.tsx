@@ -2,9 +2,11 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing } from '../../src/constants/Theme';
 import { useLocation } from '../../src/context/LocationContext';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function PermissionsScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { requestPermissions, errorMsg } = useLocation();
 
     const handlePermissions = async () => {
@@ -14,42 +16,52 @@ export default function PermissionsScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.content}>
-                <Text style={styles.header}>ACCESS REQUIRED</Text>
+        <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+            <View
+                style={[
+                    styles.container,
+                    { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl },
+                ]}
+            >
+                <View style={styles.content}>
+                    <Text style={styles.header}>ACCESS REQUIRED</Text>
 
-                <View style={styles.item}>
-                    <Text style={styles.label}>LOCATION</Text>
-                    <Text style={styles.desc}>
-                        Required to verify presence within 1010.
-                        Data is quantized and anonymous.
-                    </Text>
+                    <View style={styles.item}>
+                        <Text style={styles.label}>LOCATION</Text>
+                        <Text style={styles.desc}>
+                            Required to verify presence within 1010.
+                            Data is quantized and anonymous.
+                        </Text>
+                    </View>
+
+                    <View style={styles.item}>
+                        <Text style={styles.label}>NOTIFICATIONS</Text>
+                        <Text style={styles.desc}>
+                            Required for network contact.
+                            Expect silence for ~60 days.
+                        </Text>
+                    </View>
+
+                    {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
                 </View>
 
-                <View style={styles.item}>
-                    <Text style={styles.label}>NOTIFICATIONS</Text>
-                    <Text style={styles.desc}>
-                        Required for network contact.
-                        Expect silence for ~60 days.
-                    </Text>
-                </View>
-
-                {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
+                <TouchableOpacity style={styles.button} onPress={handlePermissions}>
+                    <Text style={styles.buttonText}>GRANT ACCESS</Text>
+                </TouchableOpacity>
             </View>
-
-            <TouchableOpacity style={styles.button} onPress={handlePermissions}>
-                <Text style={styles.buttonText}>GRANT ACCESS</Text>
-            </TouchableOpacity>
-        </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
         backgroundColor: Colors.background,
+    },
+    container: {
+        flex: 1,
         justifyContent: 'space-between',
-        padding: Spacing.xl,
+        paddingHorizontal: Spacing.xl,
     },
     content: {
         flex: 1,

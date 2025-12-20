@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Modal } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -8,6 +8,7 @@ import Animated, {
     withSequence,
 } from 'react-native-reanimated';
 import { Colors, Typography, Spacing } from '../constants/Theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface WindowAlertProps {
     visible: boolean;
@@ -16,6 +17,7 @@ interface WindowAlertProps {
 
 export const WindowAlert: React.FC<WindowAlertProps> = ({ visible, minutesRemaining }) => {
     const opacity = useSharedValue(0);
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
         if (visible) {
@@ -34,17 +36,18 @@ export const WindowAlert: React.FC<WindowAlertProps> = ({ visible, minutesRemain
 
     const animatedStyle = useAnimatedStyle(() => ({
         opacity: opacity.value,
-        borderColor: `rgba(255, 170, 0, ${opacity.value})`, // Warning color
+        borderColor: `rgba(255, 170, 0, ${opacity.value})`,
     }));
 
     if (!visible) return null;
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { top: insets.top }]}>
             <Animated.View style={[styles.alertBox, animatedStyle]}>
                 <Text style={styles.header}>WINDOW OPEN</Text>
-                <Text style={styles.timer}>{minutesRemaining} MINUTES REMAINING</Text>
-                <Text style={styles.instruction}>STAY IN MOTION.</Text>
+                <View style={styles.divider} />
+                <Text style={styles.timer}>{minutesRemaining} MINUTES</Text>
+                <Text style={styles.instruction}>STAY IN MOTION</Text>
             </Animated.View>
         </View>
     );
@@ -53,36 +56,45 @@ export const WindowAlert: React.FC<WindowAlertProps> = ({ visible, minutesRemain
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        top: 60,
         left: 0,
         right: 0,
         alignItems: 'center',
         zIndex: 100,
     },
     alertBox: {
-        backgroundColor: Colors.surface,
-        padding: Spacing.md,
+        backgroundColor: 'rgba(17, 17, 17, 0.92)',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.lg,
         borderWidth: 1,
         borderColor: Colors.warning,
         alignItems: 'center',
-        width: '80%',
+        width: '88%',
+        borderRadius: 999,
     },
     header: {
         color: Colors.warning,
-        fontSize: Typography.size.lg,
-        fontWeight: 'bold',
+        fontSize: Typography.size.xs,
+        fontFamily: Typography.mono,
         letterSpacing: 2,
-        marginBottom: Spacing.xs,
+    },
+    divider: {
+        width: 48,
+        height: 1,
+        backgroundColor: Colors.surfaceHighlight,
+        marginVertical: Spacing.xs,
+        opacity: 0.6,
     },
     timer: {
         color: Colors.primary,
-        fontSize: Typography.size.md,
+        fontSize: Typography.size.sm,
         fontFamily: Typography.mono,
-        marginBottom: Spacing.xs,
+        letterSpacing: 1,
     },
     instruction: {
         color: Colors.secondary,
-        fontSize: Typography.size.sm,
+        fontSize: Typography.size.xs,
+        fontFamily: Typography.mono,
         letterSpacing: 1,
+        marginTop: Spacing.xs,
     },
 });

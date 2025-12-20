@@ -1,0 +1,90 @@
+{
+  "version": 8,
+  "name": "mono-grey-vector",
+  "glyphs": "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  "sprite": "https://demotiles.maplibre.org/styles/osm-bright/sprite",
+  "sources": {
+    "openmaptiles": {
+      "type": "vector",
+      "url": "https://demotiles.maplibre.org/tiles/tiles.json"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#050505"
+      }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "paint": {
+        "fill-color": "#0b0b0b",
+        "fill-opacity": 0.6
+      }
+    },
+    {
+      "id": "parks",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "park",
+      "paint": {
+        "fill-color": "#0d0d0d",
+        "fill-opacity": 0.5
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#090909",
+        "fill-opacity": 0.7
+      }
+    },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "waterway",
+      "paint": {
+        "line-color": "#111111",
+        "line-width": 1,
+        "line-opacity": 0.4
+      }
+    },
+    {
+      "id": "roads",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "paint": {
+        "line-color": "#1a1a1a",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.15, 14, 0.45, 16, 0.9],
+        "line-opacity": 0.4
+      }
+    },
+    {
+      "id": "place-labels",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "place",
+      "layout": {
+        "text-field": ["get", "name:en"],
+        "text-size": 10,
+        "text-font": ["Open Sans Regular"],
+        "text-anchor": "center",
+        "text-allow-overlap": false
+      },
+      "paint": {
+        "text-color": "#4a4a4a",
+        "text-opacity": 0.35
+      }
+    }
+  ]
+}

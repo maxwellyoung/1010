@@ -3,9 +3,11 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Colors, Typography, Spacing } from '../../src/constants/Theme';
 import { useProfile } from '../../src/hooks/useProfile';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function JoinScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const [input, setInput] = useState('');
     const { createProfile } = useProfile();
     const [joining, setJoining] = useState(false);
@@ -26,47 +28,57 @@ export default function JoinScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.content}>
-                <Text style={styles.header}>IDENTIFY</Text>
-                <Text style={styles.desc}>
-                    Enter your contact method for network activation.
-                </Text>
-
-                <TextInput
-                    style={styles.input}
-                    placeholder="PHONE / EMAIL"
-                    placeholderTextColor={Colors.tertiary}
-                    value={input}
-                    onChangeText={setInput}
-                    autoCapitalize="none"
-                    editable={!joining}
-                />
-            </View>
-
-            <TouchableOpacity
-                style={[styles.button, (!input || joining) && styles.buttonDisabled]}
-                onPress={handleJoin}
-                disabled={!input || joining}
+        <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+            <View
+                style={[
+                    styles.container,
+                    { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl },
+                ]}
             >
-                {joining ? (
-                    <ActivityIndicator color={Colors.background} />
-                ) : (
-                    <Text style={[styles.buttonText, !input && styles.buttonTextDisabled]}>
-                        JOIN NETWORK
+                <View style={styles.content}>
+                    <Text style={styles.header}>IDENTIFY</Text>
+                    <Text style={styles.desc}>
+                        Enter your contact method for network activation.
                     </Text>
-                )}
-            </TouchableOpacity>
-        </View>
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="PHONE / EMAIL"
+                        placeholderTextColor={Colors.tertiary}
+                        value={input}
+                        onChangeText={setInput}
+                        autoCapitalize="none"
+                        editable={!joining}
+                    />
+                </View>
+
+                <TouchableOpacity
+                    style={[styles.button, (!input || joining) && styles.buttonDisabled]}
+                    onPress={handleJoin}
+                    disabled={!input || joining}
+                >
+                    {joining ? (
+                        <ActivityIndicator color={Colors.background} />
+                    ) : (
+                        <Text style={[styles.buttonText, !input && styles.buttonTextDisabled]}>
+                            JOIN NETWORK
+                        </Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
         backgroundColor: Colors.background,
+    },
+    container: {
+        flex: 1,
         justifyContent: 'space-between',
-        padding: Spacing.xl,
+        paddingHorizontal: Spacing.xl,
     },
     content: {
         flex: 1,

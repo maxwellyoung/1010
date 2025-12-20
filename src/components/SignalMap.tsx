@@ -14,9 +14,10 @@ import { HeatPoint } from '../hooks/usePings';
 
 interface SignalMapProps {
     heatMap: HeatPoint[];
+    size?: number;
 }
 
-const RadarRing = ({ delay, scaleMax }: { delay: number; scaleMax: number }) => {
+const RadarRing = ({ delay, scaleMax, size }: { delay: number; scaleMax: number; size: number }) => {
     const scale = useSharedValue(0);
     const opacity = useSharedValue(0.3);
 
@@ -46,10 +47,10 @@ const RadarRing = ({ delay, scaleMax }: { delay: number; scaleMax: number }) => 
         opacity: opacity.value,
     }));
 
-    return <Animated.View style={[styles.ring, animatedStyle]} />;
+    return <Animated.View style={[styles.ring, { width: size, height: size, borderRadius: size / 2 }, animatedStyle]} />;
 };
 
-const HeatBlip = ({ point }: { point: HeatPoint }) => {
+const HeatBlip = ({ point, size }: { point: HeatPoint; size: number }) => {
     const opacity = useSharedValue(0);
 
     useEffect(() => {
@@ -69,48 +70,44 @@ const HeatBlip = ({ point }: { point: HeatPoint }) => {
         top: `${(point.y + 1) * 50}%`,
     }));
 
-    return <Animated.View style={[styles.blip, animatedStyle]} />;
+    const blipSize = Math.max(4, Math.round(size * 0.03));
+    return <Animated.View style={[styles.blip, { width: blipSize, height: blipSize, borderRadius: blipSize / 2 }, animatedStyle]} />;
 };
 
-export const SignalMap: React.FC<SignalMapProps> = React.memo(({ heatMap }) => {
+export const SignalMap: React.FC<SignalMapProps> = React.memo(({ heatMap, size = 200 }) => {
+    const ringSize = size * 0.5;
+    const markerSize = Math.max(6, Math.round(size * 0.04));
+
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { width: size, height: size }]}>
             {/* Radar Rings */}
-            <RadarRing delay={0} scaleMax={1.5} />
-            <RadarRing delay={1000} scaleMax={1.5} />
-            <RadarRing delay={2000} scaleMax={1.5} />
+            <RadarRing delay={0} scaleMax={1.6} size={ringSize} />
+            <RadarRing delay={1000} scaleMax={1.6} size={ringSize} />
+            <RadarRing delay={2000} scaleMax={1.6} size={ringSize} />
 
             {/* Heat Points */}
             {heatMap.map((point) => (
-                <HeatBlip key={point.id} point={point} />
+                <HeatBlip key={point.id} point={point} size={size} />
             ))}
 
             {/* Center User Marker */}
-            <View style={styles.userMarker} />
+            <View style={[styles.userMarker, { width: markerSize, height: markerSize, borderRadius: markerSize / 2 }]} />
         </View>
     );
 });
 
 const styles = StyleSheet.create({
     container: {
-        width: 200,
-        height: 200,
         justifyContent: 'center',
         alignItems: 'center',
         overflow: 'hidden',
     },
     ring: {
         position: 'absolute',
-        width: 100,
-        height: 100,
-        borderRadius: 50,
         borderWidth: 1,
         borderColor: Colors.primary,
     },
     userMarker: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
         backgroundColor: Colors.accent,
         shadowColor: Colors.accent,
         shadowOpacity: 0.8,
@@ -118,9 +115,6 @@ const styles = StyleSheet.create({
     },
     blip: {
         position: 'absolute',
-        width: 6,
-        height: 6,
-        borderRadius: 3,
         backgroundColor: Colors.secondary,
     },
 });

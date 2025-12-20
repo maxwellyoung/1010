@@ -1,37 +1,49 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing } from '../../src/constants/Theme';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function WelcomeScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
 
     return (
-        <View style={styles.container}>
-            <View style={styles.content}>
-                <Text style={styles.logo}>1010</Text>
-                <Text style={styles.subtitle}>NETWORK</Text>
-                <Text style={styles.description}>
-                    A hyperlocal presence network.{'\n'}
-                    Locked to Auckland CBD.
-                </Text>
-            </View>
-
-            <TouchableOpacity
-                style={styles.button}
-                onPress={() => router.push('/onboarding/permissions')}
+        <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+            <View
+                style={[
+                    styles.container,
+                    { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl },
+                ]}
             >
-                <Text style={styles.buttonText}>INITIALIZE</Text>
-            </TouchableOpacity>
-        </View>
+                <View style={styles.content}>
+                    <Text style={styles.logo}>1010</Text>
+                    <Text style={styles.subtitle}>NETWORK</Text>
+                    <Text style={styles.description}>
+                        A hyperlocal presence network.{'\n'}
+                        Locked to Auckland CBD.
+                    </Text>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.button}
+                    onPress={() => router.push('/onboarding/permissions')}
+                >
+                    <Text style={styles.buttonText}>INITIALIZE</Text>
+                </TouchableOpacity>
+            </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
         backgroundColor: Colors.background,
+    },
+    container: {
+        flex: 1,
         justifyContent: 'space-between',
-        padding: Spacing.xl,
+        paddingHorizontal: Spacing.xl,
     },
     content: {
         flex: 1,

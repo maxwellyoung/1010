@@ -2,7 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Typography, Spacing } from '../src/constants/Theme';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function OutOfRangeScreen() {
+export default function NotFoundScreen() {
     const insets = useSafeAreaInsets();
 
     return (
@@ -13,13 +13,9 @@ export default function OutOfRangeScreen() {
                     { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg },
                 ]}
             >
-                <Text style={styles.header}>SIGNAL LOST</Text>
-                <Text style={styles.message}>
-                    You are outside the 1010 network boundary.
-                </Text>
-                <Text style={styles.subMessage}>
-                    Return to Auckland CBD (1010) to reconnect.
-                </Text>
+                <Text style={styles.header}>LOST ROUTE</Text>
+                <Text style={styles.message}>This path does not exist in 1010.</Text>
+                <Text style={styles.subMessage}>Return to the network to continue.</Text>
             </View>
         </SafeAreaView>
     );
@@ -37,20 +33,20 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.lg,
     },
     header: {
-        color: Colors.error,
+        color: Colors.primary,
         fontSize: Typography.size.xl,
         fontWeight: 'bold',
         marginBottom: Spacing.md,
         letterSpacing: 2,
     },
     message: {
-        color: Colors.primary,
+        color: Colors.secondary,
         fontSize: Typography.size.md,
         textAlign: 'center',
         marginBottom: Spacing.sm,
     },
     subMessage: {
-        color: Colors.secondary,
+        color: Colors.tertiary,
         fontSize: Typography.size.sm,
         textAlign: 'center',
     },

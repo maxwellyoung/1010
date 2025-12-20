@@ -18,12 +18,14 @@ interface TrailVisualizerProps {
     currentTrail: TrailPoint[];
     historicTrails: TrailPoint[][];
     isResonating: boolean;
+    size?: number;
 }
 
 export const TrailVisualizer: React.FC<TrailVisualizerProps> = React.memo(({
     currentTrail,
     historicTrails,
     isResonating,
+    size = 300,
 }) => {
     const resonanceOpacity = useSharedValue(0);
 
@@ -52,8 +54,8 @@ export const TrailVisualizer: React.FC<TrailVisualizerProps> = React.memo(({
     };
 
     return (
-        <View style={styles.container}>
-            <Svg width="100%" height="100%" viewBox="0 0 300 300">
+        <View style={[styles.container, { width: size, height: size }]}>
+            <Svg width={size} height={size} viewBox="0 0 300 300">
                 {/* Historic Trails (Faint) */}
                 {historicTrails.map((trail, i) => (
                     <Path
@@ -89,8 +91,6 @@ export const TrailVisualizer: React.FC<TrailVisualizerProps> = React.memo(({
 
 const styles = StyleSheet.create({
     container: {
-        width: 300,
-        height: 300,
         backgroundColor: 'transparent',
     },
 });
