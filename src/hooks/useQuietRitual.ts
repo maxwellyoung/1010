@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Copy } from '../constants/Copy';
 
 type Nearby = {
     id: string;
@@ -13,13 +14,7 @@ export type RitualState = {
     armingProgress: number;
 };
 
-const ritualPhrases = [
-    'HOLD STILL. THE CITY LISTENS.',
-    'THE AIR THINS BETWEEN YOU.',
-    'TWO SIGNALS, ONE BREATH.',
-    'QUIET MAKES THE LINK.',
-    'A STEP CLOSER, A LINE APPEARS.',
-];
+const ritualPhrases = Copy.ritual.phrases;
 
 export const useQuietRitual = (nearby: Nearby, resonance: number) => {
     const [state, setState] = useState<RitualState>({

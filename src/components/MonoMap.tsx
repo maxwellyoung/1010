@@ -8,7 +8,7 @@ interface MonoMapProps {
 }
 
 const gridLines = (size: number, step: number) => {
-    const lines = [] as JSX.Element[];
+    const lines: React.ReactElement[] = [];
     for (let i = step; i < size; i += step) {
         lines.push(
             <Line key={`v-${i}`} x1={i} y1={0} x2={i} y2={size} stroke={Colors.surfaceHighlight} strokeWidth={0.5} opacity={0.25} />

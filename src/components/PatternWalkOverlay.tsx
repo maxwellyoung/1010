@@ -1,8 +1,15 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, { Path, Text as SvgText, Circle } from 'react-native-svg';
-import { Colors, Typography } from '../constants/Theme';
+import Svg, { Path, Circle } from 'react-native-svg';
+import { Colors } from '../constants/Theme';
 import type { PatternWalk } from '../hooks/usePatternWalks';
+
+/**
+ * Pattern Walk Overlay - Journey-inspired
+ *
+ * Subtle path traces. No labels. No text.
+ * The paths speak through form, not words.
+ */
 
 interface PatternWalkOverlayProps {
     walks: PatternWalk[];
@@ -22,46 +29,39 @@ const pointsToPath = (points: Array<{ x: number; y: number }>, size: number) => 
 };
 
 export const PatternWalkOverlay: React.FC<PatternWalkOverlayProps> = ({ walks, activeId, size }) => {
+    // Only show the active walk, and only as a subtle trace
+    const activeWalk = walks.find(w => w.id === activeId);
+
+    if (!activeWalk) {
+        return null;
+    }
+
+    const path = pointsToPath(activeWalk.points, size);
+    const startPoint = activeWalk.points[0];
+
     return (
         <View style={[styles.container, { width: size, height: size }]} pointerEvents="none">
             <Svg width={size} height={size}>
-                {walks.map(walk => {
-                    const isActive = walk.id === activeId;
-                    const path = pointsToPath(walk.points, size);
-                    const lastPoint = walk.points[walk.points.length - 1];
-                    const labelX = mapCoord(lastPoint.x, size) + 6;
-                    const labelY = mapCoord(lastPoint.y, size) - 4;
-                    return (
-                        <React.Fragment key={walk.id}>
-                            <Path
-                                d={path}
-                                stroke={isActive ? Colors.secondary : Colors.surfaceHighlight}
-                                strokeWidth={isActive ? 1.2 : 0.6}
-                                fill="none"
-                                opacity={isActive ? 0.7 : 0.25}
-                            />
-                            <Circle
-                                cx={mapCoord(walk.points[0].x, size)}
-                                cy={mapCoord(walk.points[0].y, size)}
-                                r={2}
-                                fill={Colors.tertiary}
-                                opacity={0.6}
-                            />
-                            {isActive && (
-                                <SvgText
-                                    x={labelX}
-                                    y={labelY}
-                                    fill={Colors.tertiary}
-                                    fontSize={9}
-                                    fontFamily={Typography.mono}
-                                    letterSpacing={1}
-                                >
-                                    {walk.name}
-                                </SvgText>
-                            )}
-                        </React.Fragment>
-                    );
-                })}
+                {/* Subtle path trace */}
+                <Path
+                    d={path}
+                    stroke={Colors.surfaceHighlight}
+                    strokeWidth={1}
+                    fill="none"
+                    opacity={0.3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+                {/* Start point marker */}
+                {startPoint && (
+                    <Circle
+                        cx={mapCoord(startPoint.x, size)}
+                        cy={mapCoord(startPoint.y, size)}
+                        r={3}
+                        fill={Colors.tertiary}
+                        opacity={0.4}
+                    />
+                )}
             </Svg>
         </View>
     );

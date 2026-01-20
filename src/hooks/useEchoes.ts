@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from '../context/LocationContext';
+import { Copy } from '../constants/Copy';
 
 export interface Echo {
     id: string;
@@ -11,28 +12,8 @@ export const useEchoes = () => {
     const { isInsideNetwork } = useLocation();
     const [activeEcho, setActiveEcho] = useState<Echo | null>(null);
 
-    useEffect(() => {
-        if (!isInsideNetwork) return;
-
-        // Randomly trigger an echo
-        const interval = setInterval(() => {
-            if (Math.random() > 0.9) { // 10% chance every check
-                triggerEcho();
-            }
-        }, 10000);
-
-        return () => clearInterval(interval);
-    }, [isInsideNetwork]);
-
-    const triggerEcho = () => {
-        const messages = [
-            "THE SIGNAL IS THIN HERE.",
-            "SOMEONE WALKED THIS PATH YESTERDAY.",
-            "LOOK UP. THE WINDOW IS OPEN.",
-            "1010 REMEMBERS.",
-            "STATIC IN THE AIR.",
-        ];
-
+    const triggerEcho = useCallback(() => {
+        const messages = Copy.echo.messages;
         const randomMsg = messages[Math.floor(Math.random() * messages.length)];
 
         setActiveEcho({
@@ -43,7 +24,20 @@ export const useEchoes = () => {
 
         // Auto-dismiss after 5s
         setTimeout(() => setActiveEcho(null), 5000);
-    };
+    }, []);
+
+    useEffect(() => {
+        if (!isInsideNetwork) return;
+
+        // Randomly trigger an echo (10% chance every 10s)
+        const interval = setInterval(() => {
+            if (Math.random() > 0.9) {
+                triggerEcho();
+            }
+        }, 10000);
+
+        return () => clearInterval(interval);
+    }, [isInsideNetwork, triggerEcho]);
 
     return { activeEcho, triggerEcho };
 };

@@ -3,54 +3,33 @@ import { View, StyleSheet } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
-    withRepeat,
     withTiming,
-    withSequence,
-    Easing,
-    withSpring,
     withDelay,
+    Easing,
 } from 'react-native-reanimated';
-import { Colors, Spacing } from '../constants/Theme';
+import { Colors } from '../constants/Theme';
 
 interface ProximityBarsProps {
     strength: number;
 }
 
-const Particle = ({ active, index, total }: { active: boolean; index: number; total: number }) => {
-    const opacity = useSharedValue(0.1);
-    const scale = useSharedValue(0.8);
-    const translateY = useSharedValue(0);
+const EASE_OUT = Easing.out(Easing.cubic);
+
+const Particle = ({ active, index }: { active: boolean; index: number }) => {
+    const opacity = useSharedValue(0.15);
 
     useEffect(() => {
-        // Staggered activation
-        const delay = index * 100;
+        const delay = index * 80;
 
         if (active) {
-            opacity.value = withDelay(delay, withTiming(1, { duration: 800 }));
-            scale.value = withDelay(delay, withSpring(1));
-
-            // "Breathing" motion
-            translateY.value = withDelay(
-                delay,
-                withRepeat(
-                    withSequence(
-                        withTiming(-2, { duration: 2000, easing: Easing.inOut(Easing.quad) }),
-                        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.quad) })
-                    ),
-                    -1,
-                    true
-                )
-            );
+            opacity.value = withDelay(delay, withTiming(1, { duration: 400, easing: EASE_OUT }));
         } else {
-            opacity.value = withTiming(0.1, { duration: 500 });
-            scale.value = withTiming(0.8, { duration: 500 });
-            translateY.value = withTiming(0);
+            opacity.value = withTiming(0.15, { duration: 300 });
         }
-    }, [active, index]);
+    }, [active, index, opacity]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         opacity: opacity.value,
-        transform: [{ scale: scale.value }, { translateY: translateY.value }],
     }));
 
     return (
@@ -60,7 +39,7 @@ const Particle = ({ active, index, total }: { active: boolean; index: number; to
                 animatedStyle,
                 {
                     backgroundColor: active ? Colors.primary : Colors.tertiary,
-                    height: 4 + (index * 2), // Ascending height
+                    height: 4 + (index * 3),
                 }
             ]}
         />
@@ -68,11 +47,10 @@ const Particle = ({ active, index, total }: { active: boolean; index: number; to
 };
 
 export const ProximityBars: React.FC<ProximityBarsProps> = ({ strength }) => {
-    // Render a grid of particles instead of just bars
     return (
         <View style={styles.container}>
             {[0, 1, 2, 3, 4].map((i) => (
-                <Particle key={i} index={i} total={5} active={i < strength} />
+                <Particle key={i} index={i} active={i < strength} />
             ))}
         </View>
     );

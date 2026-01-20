@@ -1,40 +1,58 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, memo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
     withRepeat,
+    withSequence,
     withTiming,
     Easing,
 } from 'react-native-reanimated';
-import { Colors, Typography } from '../constants/Theme';
-import Svg, { Text as SvgText } from 'react-native-svg';
+import { Colors } from '../constants/Theme';
+
+/**
+ * Window Moment Overlay - Journey-inspired
+ *
+ * A subtle glow where the moment is.
+ * No timer. No text. Just presence.
+ */
 
 interface WindowMomentOverlayProps {
     isOpen: boolean;
     position: { x: number; y: number } | null;
     size: number;
+    startedAt?: number | null;
+    endsAt?: number | null;
+    participantCount?: number;
 }
 
 const mapCoord = (value: number, size: number) => (value + 1) * 0.5 * size;
 
-export const WindowMomentOverlay: React.FC<WindowMomentOverlayProps> = ({ isOpen, position, size }) => {
+export const WindowMomentOverlay = memo<WindowMomentOverlayProps>(({
+    isOpen,
+    position,
+    size,
+}) => {
     const pulse = useSharedValue(0);
 
     useEffect(() => {
         if (!isOpen) {
-            pulse.value = 0;
+            pulse.value = withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) });
             return;
         }
+        // Very slow breathing glow
         pulse.value = withRepeat(
-            withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
+            withSequence(
+                withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
+                withTiming(0, { duration: 3000, easing: Easing.inOut(Easing.sin) })
+            ),
             -1,
-            true
+            false
         );
     }, [isOpen, pulse]);
 
-    const animatedStyle = useAnimatedStyle(() => ({
-        opacity: 0.3 + pulse.value * 0.4,
+    const glowStyle = useAnimatedStyle(() => ({
+        opacity: 0.08 + pulse.value * 0.12,
         transform: [{ scale: 0.9 + pulse.value * 0.15 }],
     }));
 
@@ -42,35 +60,29 @@ export const WindowMomentOverlay: React.FC<WindowMomentOverlayProps> = ({ isOpen
         return null;
     }
 
-    const x = mapCoord(position.x, size) - 28;
-    const y = mapCoord(position.y, size) - 28;
-    const glyphs = ['<>', '[]', '--'];
+    // Much smaller, subtler glow
+    const glowSize = size * 0.12;
+    const x = mapCoord(position.x, size) - glowSize / 2;
+    const y = mapCoord(position.y, size) - glowSize / 2;
 
     return (
         <View style={[styles.container, { width: size, height: size }]} pointerEvents="none">
-            <Animated.View style={[styles.portal, animatedStyle, { left: x, top: y }]} />
-            <Animated.View style={[styles.portalInner, animatedStyle, { left: x + 6, top: y + 6 }]} />
-            <View style={[styles.glyphLayer, { left: x, top: y }]}>
-                <Svg width={56} height={56}>
-                    {glyphs.map((glyph, index) => (
-                        <SvgText
-                            key={glyph}
-                            x={28}
-                            y={16 + index * 14}
-                            fill={Colors.tertiary}
-                            fontSize={8}
-                            fontFamily={Typography.mono}
-                            textAnchor="middle"
-                            opacity={0.6}
-                        >
-                            {glyph}
-                        </SvgText>
-                    ))}
-                </Svg>
-            </View>
+            <Animated.View
+                style={[
+                    styles.glow,
+                    {
+                        left: x,
+                        top: y,
+                        width: glowSize,
+                        height: glowSize,
+                        borderRadius: glowSize / 2,
+                    },
+                    glowStyle,
+                ]}
+            />
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
@@ -78,27 +90,8 @@ const styles = StyleSheet.create({
         left: 0,
         top: 0,
     },
-    portal: {
+    glow: {
         position: 'absolute',
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        borderWidth: 1,
-        borderColor: Colors.surfaceHighlight,
-    },
-    portalInner: {
-        position: 'absolute',
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 1,
-        borderColor: Colors.tertiary,
-    },
-    glyphLayer: {
-        position: 'absolute',
-        width: 56,
-        height: 56,
-        alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: Colors.warning,
     },
 });

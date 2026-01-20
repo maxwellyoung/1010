@@ -19,9 +19,14 @@ export default function WalksScreen() {
                     { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg },
                 ]}
             >
-                <View style={styles.header}>
-                    <Text style={styles.title}>PATTERN WALKS</Text>
-                    <TouchableOpacity onPress={() => router.back()}>
+                <View style={styles.header} accessibilityRole="header">
+                    <Text style={styles.title} accessibilityRole="header">PATTERN WALKS</Text>
+                    <TouchableOpacity
+                        onPress={() => router.back()}
+                        accessibilityLabel="Close pattern walks"
+                        accessibilityRole="button"
+                        accessibilityHint="Returns to the network screen"
+                    >
                         <Text style={styles.close}>CLOSE</Text>
                     </TouchableOpacity>
                 </View>
@@ -37,6 +42,10 @@ export default function WalksScreen() {
                                 style={[styles.card, isActive && styles.cardActive]}
                                 onPress={() => setSelectedId(isActive ? null : walk.id)}
                                 activeOpacity={0.8}
+                                accessibilityLabel={`${walk.name}. ${walk.description}. ${isActive ? 'Currently active' : 'Tap to activate'}`}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isActive }}
+                                accessibilityHint={isActive ? 'Double tap to deactivate this walk' : 'Double tap to activate this walk'}
                             >
                                 <Text style={styles.cardName}>{walk.name}</Text>
                                 <Text style={styles.cardDescription}>{walk.description}</Text>

@@ -1,17 +1,47 @@
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    withDelay,
+    Easing,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing } from '../../src/constants/Theme';
+import { Glyphs } from '../../src/constants/Glyphs';
 import { useLocation } from '../../src/context/LocationContext';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const FADE = 500;
+const STAGGER = 150;
+const EASE_OUT = Easing.out(Easing.cubic);
 
 export default function PermissionsScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { requestPermissions, errorMsg } = useLocation();
 
+    // Pure opacity - no transforms
+    const headerOpacity = useSharedValue(0);
+    const item1Opacity = useSharedValue(0);
+    const item2Opacity = useSharedValue(0);
+    const buttonOpacity = useSharedValue(0);
+
+    useEffect(() => {
+        headerOpacity.value = withDelay(100, withTiming(1, { duration: FADE, easing: EASE_OUT }));
+        item1Opacity.value = withDelay(100 + STAGGER, withTiming(0.9, { duration: FADE, easing: EASE_OUT }));
+        item2Opacity.value = withDelay(100 + STAGGER * 2, withTiming(0.9, { duration: FADE, easing: EASE_OUT }));
+        buttonOpacity.value = withDelay(100 + STAGGER * 3, withTiming(1, { duration: FADE, easing: EASE_OUT }));
+    }, [headerOpacity, item1Opacity, item2Opacity, buttonOpacity]);
+
+    const headerStyle = useAnimatedStyle(() => ({ opacity: headerOpacity.value }));
+    const item1Style = useAnimatedStyle(() => ({ opacity: item1Opacity.value }));
+    const item2Style = useAnimatedStyle(() => ({ opacity: item2Opacity.value }));
+    const buttonStyle = useAnimatedStyle(() => ({ opacity: buttonOpacity.value }));
+
     const handlePermissions = async () => {
         await requestPermissions();
-        // In a real app, we'd check if permissions were actually granted
         router.push('/onboarding/join');
     };
 
@@ -24,30 +54,44 @@ export default function PermissionsScreen() {
                 ]}
             >
                 <View style={styles.content}>
-                    <Text style={styles.header}>ACCESS REQUIRED</Text>
+                    <Animated.Text style={[styles.header, headerStyle]}>PERMISSIONS</Animated.Text>
 
-                    <View style={styles.item}>
-                        <Text style={styles.label}>LOCATION</Text>
+                    <Animated.View style={[styles.item, item1Style]}>
+                        <View style={styles.labelRow}>
+                            <Text style={styles.glyph}>{Glyphs.status.pulse}</Text>
+                            <Text style={styles.label}>LOCATION</Text>
+                        </View>
                         <Text style={styles.desc}>
-                            Required to verify presence within 1010.
-                            Data is quantized and anonymous.
+                            To know when you're here.{'\n'}
+                            Your position stays approximate.
                         </Text>
-                    </View>
+                    </Animated.View>
 
-                    <View style={styles.item}>
-                        <Text style={styles.label}>NOTIFICATIONS</Text>
+                    <Animated.View style={[styles.item, item2Style]}>
+                        <View style={styles.labelRow}>
+                            <Text style={styles.glyph}>{Glyphs.presence.echo}</Text>
+                            <Text style={styles.label}>NOTIFICATIONS</Text>
+                        </View>
                         <Text style={styles.desc}>
-                            Required for network contact.
-                            Expect silence for ~60 days.
+                            For rare network moments.{'\n'}
+                            We believe in silence.
                         </Text>
-                    </View>
+                    </Animated.View>
 
                     {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
                 </View>
 
-                <TouchableOpacity style={styles.button} onPress={handlePermissions}>
-                    <Text style={styles.buttonText}>GRANT ACCESS</Text>
-                </TouchableOpacity>
+                <Animated.View style={buttonStyle}>
+                    <TouchableOpacity
+                        style={styles.button}
+                        onPress={handlePermissions}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Allow permissions"
+                        accessibilityRole="button"
+                    >
+                        <Text style={styles.buttonText}>ALLOW</Text>
+                    </TouchableOpacity>
+                </Animated.View>
             </View>
         </SafeAreaView>
     );
@@ -69,39 +113,54 @@ const styles = StyleSheet.create({
     },
     header: {
         color: Colors.primary,
-        fontSize: Typography.size.xl,
-        fontWeight: 'bold',
+        fontSize: Typography.size.lg,
+        fontFamily: Typography.mono,
+        fontWeight: '300',
         marginBottom: Spacing.xxl,
-        letterSpacing: 2,
+        letterSpacing: 3,
     },
     item: {
         marginBottom: Spacing.xl,
     },
-    label: {
-        color: Colors.primary,
-        fontSize: Typography.size.sm,
-        fontWeight: 'bold',
+    labelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: Spacing.xs,
-        letterSpacing: 1,
+        gap: Spacing.sm,
+    },
+    glyph: {
+        color: Colors.tertiary,
+        fontSize: Typography.size.md,
+    },
+    label: {
+        color: Colors.secondary,
+        fontSize: Typography.size.xs,
+        fontFamily: Typography.mono,
+        letterSpacing: 2,
     },
     desc: {
-        color: Colors.secondary,
-        lineHeight: 20,
+        color: Colors.primary,
+        lineHeight: 22,
+        fontFamily: Typography.mono,
+        fontSize: Typography.size.sm,
+        paddingLeft: Spacing.lg + Spacing.sm,
+        letterSpacing: 0.3,
     },
     error: {
         color: Colors.error,
         marginTop: Spacing.md,
+        fontFamily: Typography.mono,
     },
     button: {
-        borderColor: Colors.primary,
+        borderColor: Colors.tertiary,
         borderWidth: 1,
         padding: Spacing.md,
         alignItems: 'center',
-        borderRadius: 4,
     },
     buttonText: {
         color: Colors.primary,
-        fontWeight: 'bold',
-        letterSpacing: 2,
+        fontFamily: Typography.mono,
+        fontSize: Typography.size.xs,
+        letterSpacing: 3,
     },
 });

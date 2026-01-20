@@ -1,11 +1,67 @@
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    withDelay,
+    withSequence,
+    Easing,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing } from '../../src/constants/Theme';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GlyphReveal } from '../../src/components/GlyphReveal';
+
+// Timing constants - unhurried, elegant
+const FADE_DURATION = 600;
+const EASE_OUT = Easing.out(Easing.cubic);
 
 export default function WelcomeScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const [showGlyphs, setShowGlyphs] = useState(true);
+    const [contentReady, setContentReady] = useState(false);
+
+    // Simple opacity animations - no springs, no scale
+    const logoOpacity = useSharedValue(0);
+    const subtitleOpacity = useSharedValue(0);
+    const descriptionOpacity = useSharedValue(0);
+    const buttonOpacity = useSharedValue(0);
+
+    useEffect(() => {
+        const glyphDuration = 2000;
+        setTimeout(() => {
+            setShowGlyphs(false);
+            setContentReady(true);
+        }, glyphDuration);
+    }, []);
+
+    useEffect(() => {
+        if (!contentReady) return;
+
+        // Staggered fade-in - pure opacity, no transforms
+        logoOpacity.value = withTiming(1, { duration: FADE_DURATION, easing: EASE_OUT });
+        subtitleOpacity.value = withDelay(200, withTiming(0.6, { duration: FADE_DURATION, easing: EASE_OUT }));
+        descriptionOpacity.value = withDelay(400, withTiming(0.7, { duration: FADE_DURATION, easing: EASE_OUT }));
+        buttonOpacity.value = withDelay(800, withTiming(1, { duration: FADE_DURATION, easing: EASE_OUT }));
+    }, [contentReady, logoOpacity, subtitleOpacity, descriptionOpacity, buttonOpacity]);
+
+    const logoStyle = useAnimatedStyle(() => ({
+        opacity: logoOpacity.value,
+    }));
+
+    const subtitleStyle = useAnimatedStyle(() => ({
+        opacity: subtitleOpacity.value,
+    }));
+
+    const descriptionStyle = useAnimatedStyle(() => ({
+        opacity: descriptionOpacity.value,
+    }));
+
+    const buttonStyle = useAnimatedStyle(() => ({
+        opacity: buttonOpacity.value,
+    }));
 
     return (
         <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -16,20 +72,41 @@ export default function WelcomeScreen() {
                 ]}
             >
                 <View style={styles.content}>
-                    <Text style={styles.logo}>1010</Text>
-                    <Text style={styles.subtitle}>NETWORK</Text>
-                    <Text style={styles.description}>
-                        A hyperlocal presence network.{'\n'}
-                        Locked to Auckland CBD.
-                    </Text>
+                    {showGlyphs && (
+                        <View style={styles.glyphContainer}>
+                            <GlyphReveal active={showGlyphs} count={8} size="lg" />
+                        </View>
+                    )}
+
+                    {contentReady && (
+                        <>
+                            <Animated.Text style={[styles.logo, logoStyle]}>1010</Animated.Text>
+                            <Animated.Text style={[styles.subtitle, subtitleStyle]}>NETWORK</Animated.Text>
+                            <Animated.Text style={[styles.description, descriptionStyle]}>
+                                A presence layer for this place.{'\n'}
+                                The network remembers you here.
+                            </Animated.Text>
+                        </>
+                    )}
                 </View>
 
-                <TouchableOpacity
-                    style={styles.button}
-                    onPress={() => router.push('/onboarding/permissions')}
-                >
-                    <Text style={styles.buttonText}>INITIALIZE</Text>
-                </TouchableOpacity>
+                {contentReady && (
+                    <Animated.View style={buttonStyle}>
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={() => router.push('/onboarding/permissions')}
+                            activeOpacity={0.7}
+                            accessibilityLabel="Enter the network"
+                            accessibilityRole="button"
+                            accessibilityHint="Begins the network setup process"
+                        >
+                            <Text style={styles.buttonText}>ENTER THE NETWORK</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.hint}>
+                            You'll be asked for location access
+                        </Text>
+                    </Animated.View>
+                )}
             </View>
         </SafeAreaView>
     );
@@ -50,33 +127,54 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    glyphContainer: {
+        position: 'absolute',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     logo: {
         color: Colors.primary,
-        fontSize: 64,
-        fontWeight: 'bold',
-        letterSpacing: 4,
+        fontSize: 72,
+        fontFamily: Typography.mono,
+        fontWeight: '100',
+        letterSpacing: 8,
     },
     subtitle: {
-        color: Colors.secondary,
-        fontSize: Typography.size.lg,
-        letterSpacing: 8,
-        marginBottom: Spacing.xl,
+        color: Colors.tertiary,
+        fontSize: Typography.size.sm,
+        fontFamily: Typography.mono,
+        textTransform: 'uppercase',
+        letterSpacing: 6,
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.xxl,
     },
     description: {
         color: Colors.primary,
+        fontSize: Typography.size.sm,
+        fontFamily: Typography.mono,
         textAlign: 'center',
         lineHeight: 24,
-        opacity: 0.8,
+        letterSpacing: 0.3,
     },
     button: {
         backgroundColor: Colors.primary,
-        padding: Spacing.md,
+        paddingVertical: Spacing.md,
+        paddingHorizontal: Spacing.xl,
         alignItems: 'center',
-        borderRadius: 4,
     },
     buttonText: {
         color: Colors.background,
-        fontWeight: 'bold',
-        letterSpacing: 2,
+        fontSize: Typography.size.xs,
+        fontFamily: Typography.mono,
+        fontWeight: '500',
+        letterSpacing: 3,
+    },
+    hint: {
+        color: Colors.quaternary,
+        fontSize: Typography.size.xs,
+        fontFamily: Typography.mono,
+        textAlign: 'center',
+        marginTop: Spacing.md,
+        letterSpacing: 1,
     },
 });

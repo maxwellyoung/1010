@@ -1,29 +1,62 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated, Easing, ScrollView, Dimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Dimensions } from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withRepeat,
+    withTiming,
+    withSequence,
+    Easing,
+} from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Constants
 import { Colors, Typography, Spacing } from '../src/constants/Theme';
-import { ProximityBars } from '../src/components/ProximityBars';
-import { useNetworkStats } from '../src/hooks/useNetworkStats';
-import { useProfile } from '../src/hooks/useProfile';
-import { usePings } from '../src/hooks/usePings';
-import { useTrails } from '../src/hooks/useTrails';
-import { useEchoes } from '../src/hooks/useEchoes';
-import { SignalMap } from '../src/components/SignalMap';
-import { TrailVisualizer } from '../src/components/TrailVisualizer';
+import { Motion } from '../src/constants/Motion';
+import { Copy } from '../src/constants/Copy';
+
+// Network sub-components
+import {
+    NetworkHeader,
+    NetworkFooter,
+    RitualOverlay,
+    SignalVisualization,
+    CityBreathHalo,
+} from '../src/components/network';
+
+// Existing components
 import { FocusOverlay } from '../src/components/FocusOverlay';
 import { EchoOverlay } from '../src/components/EchoOverlay';
 import { DevMenu } from '../src/components/DevMenu';
+import { SignalMap } from '../src/components/SignalMap';
+import { TrailVisualizer } from '../src/components/TrailVisualizer';
+import { MapBackdrop } from '../src/components/MapBackdrop';
+import { DriftMarker } from '../src/components/DriftMarker';
 import { AmbientOverlay } from '../src/components/AmbientOverlay';
 import { TrailAmbientOverlay } from '../src/components/TrailAmbientOverlay';
 import { ResonanceThreadsOverlay } from '../src/components/ResonanceThreadsOverlay';
 import { WindowMomentOverlay } from '../src/components/WindowMomentOverlay';
 import { PatternWalkOverlay } from '../src/components/PatternWalkOverlay';
-import { MapBackdrop } from '../src/components/MapBackdrop';
-import { DriftMarker } from '../src/components/DriftMarker';
+import { FogOverlay } from '../src/components/FogOverlay';
+import { CompanionOverlay } from '../src/components/CompanionOverlay';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { FamiliarSignalOverlay } from '../src/components/FamiliarSignalOverlay';
+import { TemporalSlider } from '../src/components/TemporalSlider';
+import { FirstLaunchTutorial } from '../src/components/FirstLaunchTutorial';
+
+// Hooks
+import { useNetworkStats } from '../src/hooks/useNetworkStats';
+import { useProfile } from '../src/hooks/useProfile';
+import { usePings } from '../src/hooks/usePings';
+import { useTrails } from '../src/hooks/useTrails';
+import { useEchoes } from '../src/hooks/useEchoes';
 import { useLocation } from '../src/context/LocationContext';
 import { usePassingEchoes } from '../src/hooks/usePassingEchoes';
 import { useGhostPings } from '../src/hooks/useGhostPings';
 import { useSignalGlyphs } from '../src/hooks/useSignalGlyphs';
 import { useProximitySession } from '../src/hooks/useProximitySession';
-import { Proximity } from '../src/native/Proximity';
 import { useCityBreath } from '../src/hooks/useCityBreath';
 import { useQuietRitual } from '../src/hooks/useQuietRitual';
 import { useResonanceThreads } from '../src/hooks/useResonanceThreads';
@@ -32,101 +65,141 @@ import { usePatternWalks } from '../src/hooks/usePatternWalks';
 import { usePatternWalkSelection } from '../src/hooks/usePatternWalkSelection';
 import { useSupabaseSignals } from '../src/hooks/useSupabaseSignals';
 import { useSupabaseDensity } from '../src/hooks/useSupabaseDensity';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDemoMode } from '../src/hooks/useDemoMode';
+import { useShare } from '../src/hooks/useShare';
+import { useTemporalLayers } from '../src/hooks/useTemporalLayers';
+import { useResonanceMemory } from '../src/hooks/useResonanceMemory';
+import { useFirstLaunch } from '../src/hooks/useFirstLaunch';
+import { useExploration } from '../src/hooks/useExploration';
+import { useCompanions } from '../src/hooks/useCompanions';
+
+// Native
+import { Proximity } from '../src/native/Proximity';
+
+type ViewMode = 'signal' | 'trails';
 
 export default function NetworkScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+
+    // Core data hooks
     const { stats, loading: statsLoading } = useNetworkStats();
     const { profile } = useProfile();
     const { heatMap } = usePings();
-    const { currentTrail, historicTrails, isResonating } = useTrails();
+    const { currentTrail, historicTrails, isResonating, clearCurrentTrail } = useTrails();
     const { activeEcho, triggerEcho } = useEchoes();
     const { isInsideNetwork, location, setOverride } = useLocation();
-    const { isActive: proximityActive, lastEncounter, nearby, resonance, lastError, peerStates } = useProximitySession(profile?.id);
+    const { lastEncounter, nearby, resonance, peerStates } = useProximitySession(profile?.id);
     const { densityScore } = useSupabaseDensity(location?.coords);
+    const { selectedId: selectedWalkId } = usePatternWalkSelection();
+    const { sharePresence } = useShare();
+    const {
+        ghostPings: realtimeGhostPings,
+        windowMoment: realtimeWindowMoment,
+        sendGhostPing,
+        sendWindowMoment,
+        isConfigured: realtimeEnabled,
+        presenceCount,
+    } = useSupabaseSignals();
+
+    // Temporal layers (time travel through network history)
+    const temporalLayers = useTemporalLayers();
+
+    // Resonance memory (familiar signal detection)
+    const resonanceMemory = useResonanceMemory();
+
+    // First launch tutorial
+    const { isFirstLaunch, isLoading: tutorialLoading, markRevealSeen, resetFirstLaunch } = useFirstLaunch();
+
+    // Exploration (fog of war)
+    const exploration = useExploration();
+
+    // Journey-style companions
+    const { companions } = useCompanions(peerStates, nearby);
+
+    // Computed values
     const effectiveDensity = densityScore > 0 ? densityScore : stats.pingDensity;
+    const peerCount = Object.values(peerStates).filter(state => state === 2).length;
+
+    // Animation hooks
     const cityBreath = useCityBreath(effectiveDensity);
     const { ritual, triggerRitual } = useQuietRitual(nearby, resonance);
-    const peerCount = Object.values(peerStates).filter(state => state === 2).length;
-    const { selectedId: selectedWalkId } = usePatternWalkSelection();
-    const { ghostPings: realtimeGhostPings, windowMoment: realtimeWindowMoment, sendGhostPing, sendWindowMoment, isConfigured: realtimeEnabled, presenceCount, recentPresenceCount } = useSupabaseSignals();
 
+    // Demo mode (consolidated)
+    const demoConfig = useMemo(() => ({
+        onTriggerEcho: triggerEcho,
+        onTriggerRitual: triggerRitual,
+        onTriggerWindow: () => {}, // Will be set after useWindowMoments
+    }), [triggerEcho, triggerRitual]);
+
+    const { state: demoState, actions: demoActions } = useDemoMode(demoConfig);
+
+    // Local state
     const [daysRemaining, setDaysRemaining] = useState(60);
-    const [windowOpen, setWindowOpen] = useState(false);
-    const [viewMode, setViewMode] = useState<'signal' | 'trails'>('signal');
-    const [demoPassingEchoes, setDemoPassingEchoes] = useState(true);
-    const [demoGhostPings, setDemoGhostPings] = useState(true);
-    const [demoGlyphs, setDemoGlyphs] = useState(true);
-    const [demoThreads, setDemoThreads] = useState(true);
-    const [demoWindows, setDemoWindows] = useState(true);
-    const [demoPatternWalks, setDemoPatternWalks] = useState(true);
-    const [demoSequenceActive, setDemoSequenceActive] = useState(false);
-    const [presentationMode, setPresentationMode] = useState(false);
+    const [viewMode, setViewMode] = useState<ViewMode>('signal');
     const [focusOpen, setFocusOpen] = useState(false);
-    const mapFade = useRef(new Animated.Value(1)).current;
-    const pulse = useRef(new Animated.Value(0)).current;
-    const baseOpacity = useRef(new Animated.Value(0.12)).current;
-    const breath = useRef(new Animated.Value(0)).current;
-    const ritualOpacity = useRef(new Animated.Value(0)).current;
+    const [familiarSignal, setFamiliarSignal] = useState<{
+        visible: boolean;
+        peerId: string | null;
+    }>({ visible: false, peerId: null });
+
+    // Animated values (Reanimated)
+    const mapFade = useSharedValue(1);
+    const windowPulse = useSharedValue(0);
     const ritualHapticTimeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
     const lastWindowBroadcast = useRef<number | null>(null);
     const lastGhostBroadcast = useRef<string | null>(null);
-    const windowPulse = useRef(new Animated.Value(0)).current;
 
-    useEffect(() => {
-        const loop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulse, { toValue: 1, duration: 2400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-                Animated.timing(pulse, { toValue: 0, duration: 2400, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-            ])
-        );
-        loop.start();
-        return () => loop.stop();
-    }, [pulse]);
+    // Derived show flags
+    const showGhostPings = demoState.ghostPings || isInsideNetwork;
+    const showGlyphs = demoState.glyphs || isInsideNetwork;
+    const showThreads = demoState.threads || isInsideNetwork;
+    const showWindows = demoState.windows || isInsideNetwork;
+    const showPatternWalks = demoState.patternWalks || isInsideNetwork;
+    const showFog = isInsideNetwork && exploration.isLoaded;
+    const showCompanions = isInsideNetwork;
 
-    useEffect(() => {
-        const loop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(breath, { toValue: 1, duration: cityBreath.periodMs, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-                Animated.timing(breath, { toValue: 0, duration: cityBreath.periodMs, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-            ])
-        );
-        loop.start();
-        return () => loop.stop();
-    }, [breath, cityBreath.periodMs]);
+    // Effect hooks for ambient data
+    const passingEchoes = usePassingEchoes(lastEncounter, demoState.passingEchoes);
+    const ghostPings = useGhostPings(showGhostPings);
+    const glyphs = useSignalGlyphs(showGlyphs, isInsideNetwork);
+    const threads = useResonanceThreads(lastEncounter, demoState.threads);
+    const { windowMoment, triggerWindow } = useWindowMoments(peerCount, presenceCount, demoState.windows);
+    const { walks, active: activeWalk } = usePatternWalks(demoState.patternWalks, selectedWalkId);
 
-    useEffect(() => {
-        Animated.timing(ritualOpacity, {
-            toValue: ritual.active ? 1 : 0,
-            duration: ritual.active ? 400 : 600,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-        }).start();
-    }, [ritual.active, ritualOpacity]);
+    // Combined ghost pings
+    const combinedGhostPings = useMemo(() => {
+        const merged = [...realtimeGhostPings, ...ghostPings];
+        return merged.slice(0, 8);
+    }, [realtimeGhostPings, ghostPings]);
 
+    // Active window moment
+    const activeWindowMoment = windowMoment.isOpen ? windowMoment : realtimeWindowMoment;
+    const windowIsOpen = demoState.windowAlertOpen || activeWindowMoment.isOpen;
+    const windowMinutes = activeWindowMoment.endsAt
+        ? Math.max(1, Math.ceil((activeWindowMoment.endsAt - Date.now()) / (1000 * 60)))
+        : 7;
+
+    // Window pulse animation
     useEffect(() => {
         if (!windowIsOpen) {
-            windowPulse.stopAnimation();
-            windowPulse.setValue(0);
+            windowPulse.value = withTiming(0, { duration: Motion.duration.interaction });
             return;
         }
-        const loop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(windowPulse, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-                Animated.timing(windowPulse, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-            ])
+        windowPulse.value = withRepeat(
+            withSequence(
+                withTiming(1, { duration: 1200, easing: Motion.easing.ambient }),
+                withTiming(0, { duration: 1200, easing: Motion.easing.ambient })
+            ),
+            -1,
+            true
         );
-        loop.start();
-        return () => loop.stop();
     }, [windowIsOpen, windowPulse]);
 
+    // Ritual haptic feedback
     useEffect(() => {
         if (!ritual.arming) {
-            ritualHapticTimeouts.current.forEach(timeoutId => clearTimeout(timeoutId));
+            ritualHapticTimeouts.current.forEach(clearTimeout);
             ritualHapticTimeouts.current = [];
             return;
         }
@@ -135,137 +208,26 @@ export default function NetworkScreen() {
             setTimeout(() => Proximity.triggerHaptic('medium'), 240),
             setTimeout(() => Proximity.triggerHaptic('heavy'), 520),
         ];
-
         return () => {
-            ritualHapticTimeouts.current.forEach(timeoutId => clearTimeout(timeoutId));
+            ritualHapticTimeouts.current.forEach(clearTimeout);
             ritualHapticTimeouts.current = [];
         };
     }, [ritual.arming]);
 
+    // Calculate days remaining
     useEffect(() => {
-        const next = 0.08 + resonance * 0.42;
-        baseOpacity.setValue(next);
-    }, [baseOpacity, resonance]);
-
-    const auraStyle = useMemo(() => {
-        const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] });
-        const opacity = Animated.add(
-            baseOpacity,
-            pulse.interpolate({ inputRange: [0, 1], outputRange: [0.02, 0.14] })
-        );
-        return {
-            transform: [{ scale }],
-            opacity,
-        };
-    }, [baseOpacity, pulse]);
-
-    const breathStyle = useMemo(() => {
-        const minOpacity = 0.02 + cityBreath.intensity * 0.18;
-        const maxOpacity = minOpacity + 0.1;
-        const opacity = breath.interpolate({ inputRange: [0, 1], outputRange: [minOpacity, maxOpacity] });
-        const scale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
-        return { opacity, transform: [{ scale }] };
-    }, [breath, cityBreath.intensity]);
-
-    const showGhostPings = demoGhostPings || isInsideNetwork;
-    const showGlyphs = demoGlyphs || isInsideNetwork;
-    const showThreads = demoThreads || isInsideNetwork;
-    const showWindows = demoWindows || isInsideNetwork;
-    const showPatternWalks = demoPatternWalks || isInsideNetwork;
-    const passingEchoes = usePassingEchoes(lastEncounter, demoPassingEchoes);
-    const ghostPings = useGhostPings(showGhostPings);
-    const glyphs = useSignalGlyphs(showGlyphs, isInsideNetwork);
-    const threads = useResonanceThreads(lastEncounter, demoThreads);
-    const { windowMoment, triggerWindow } = useWindowMoments(peerCount, demoWindows);
-    const { walks, active: activeWalk } = usePatternWalks(demoPatternWalks, selectedWalkId);
-    const combinedGhostPings = useMemo(() => {
-        const merged = [...realtimeGhostPings, ...ghostPings];
-        return merged.slice(0, 8);
-    }, [realtimeGhostPings, ghostPings]);
-    const activeWindowMoment = windowMoment.isOpen ? windowMoment : realtimeWindowMoment;
-    const buildGhostPing = () => {
-        const now = Date.now();
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 0.2 + Math.random() * 0.7;
-        return {
-            id: `ghost-${now}`,
-            x: Math.cos(angle) * radius,
-            y: Math.sin(angle) * radius,
-            ageMinutes: 5 + Math.floor(Math.random() * 11),
-        };
-    };
-
-    useEffect(() => {
-        if (!demoSequenceActive) {
-            return;
+        if (profile?.activationDate) {
+            const now = new Date();
+            const activation = new Date(profile.activationDate);
+            const diffTime = Math.abs(activation.getTime() - now.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            setDaysRemaining(diffDays);
         }
+    }, [profile]);
 
-        setDemoPassingEchoes(true);
-        setDemoGhostPings(true);
-        setDemoGlyphs(true);
-        setDemoThreads(true);
-        setDemoWindows(true);
-        setDemoPatternWalks(true);
-        setViewMode('signal');
-
-        const timeouts = [
-            setTimeout(() => setWindowOpen(true), 500),
-            setTimeout(() => triggerEcho(), 2500),
-            setTimeout(() => triggerRitual(), 5200),
-            setTimeout(() => setWindowOpen(false), 7000),
-            setTimeout(() => triggerEcho(), 12000),
-            setTimeout(() => triggerWindow(), 13500),
-            setTimeout(() => setDemoSequenceActive(false), 18000),
-        ];
-
-        return () => {
-            timeouts.forEach(timeoutId => clearTimeout(timeoutId));
-        };
-    }, [demoSequenceActive, triggerEcho, triggerRitual, triggerWindow]);
-
+    // Broadcast window moments
     useEffect(() => {
-        if (!presentationMode) {
-            setDemoSequenceActive(false);
-            Animated.timing(mapFade, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-            return;
-        }
-        setDemoPassingEchoes(true);
-        setDemoGhostPings(true);
-        setDemoGlyphs(true);
-        setDemoThreads(true);
-        setDemoWindows(true);
-        setDemoPatternWalks(true);
-        setDemoSequenceActive(true);
-        setViewMode('signal');
-
-        const cycle = setInterval(() => {
-            setViewMode(prev => (prev === 'signal' ? 'trails' : 'signal'));
-            triggerEcho();
-            setWindowOpen(true);
-            setTimeout(() => setWindowOpen(false), 4500);
-            setTimeout(() => triggerRitual(), 2000);
-            setTimeout(() => triggerWindow(), 5200);
-        }, 18000);
-
-        const fadeLoop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(mapFade, { toValue: 0.4, duration: 2800, useNativeDriver: true }),
-                Animated.timing(mapFade, { toValue: 0.85, duration: 2800, useNativeDriver: true }),
-            ])
-        );
-        fadeLoop.start();
-
-        return () => {
-            fadeLoop.stop();
-            clearInterval(cycle);
-        };
-    }, [mapFade, presentationMode, triggerEcho, triggerRitual, triggerWindow]);
-
-    useEffect(() => {
-        if (!realtimeEnabled) {
-            return;
-        }
-        if (!windowMoment.isOpen || !windowMoment.startedAt || !windowMoment.endsAt || !windowMoment.position) {
+        if (!realtimeEnabled || !windowMoment.isOpen || !windowMoment.startedAt || !windowMoment.endsAt || !windowMoment.position) {
             return;
         }
         if (lastWindowBroadcast.current === windowMoment.startedAt) {
@@ -280,6 +242,7 @@ export default function NetworkScreen() {
         });
     }, [realtimeEnabled, sendWindowMoment, windowMoment]);
 
+    // Broadcast ghost pings
     useEffect(() => {
         if (!realtimeEnabled || !showGhostPings) {
             return;
@@ -292,20 +255,59 @@ export default function NetworkScreen() {
         sendGhostPing(latest);
     }, [ghostPings, realtimeEnabled, sendGhostPing, showGhostPings]);
 
+    // Check for familiar signals on encounter
     useEffect(() => {
-        if (profile?.activationDate) {
-            const now = new Date();
-            const activation = new Date(profile.activationDate);
-            const diffTime = Math.abs(activation.getTime() - now.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            setDaysRemaining(diffDays);
+        if (!lastEncounter?.id) return;
+
+        const memory = resonanceMemory.getMemory(lastEncounter.id);
+        if (memory && memory.memoryLevel >= 1) {
+            // This is a familiar signal
+            setFamiliarSignal({ visible: true, peerId: lastEncounter.id });
         }
-    }, [profile]);
 
-    // Dev Actions
-    const toggleWindow = () => setWindowOpen(!windowOpen);
+        // Record the encounter in memory (ritual is active if it triggered)
+        resonanceMemory.recordEncounter(lastEncounter.id, ritual.active);
+    }, [lastEncounter?.id, resonanceMemory, ritual.active]);
 
-    const handleResetOnboarding = async () => {
+    // Hide familiar signal overlay after display
+    const handleFamiliarSignalComplete = useCallback(() => {
+        setFamiliarSignal({ visible: false, peerId: null });
+    }, []);
+
+    // Presentation mode map fade
+    useEffect(() => {
+        if (!demoState.presentationMode) {
+            mapFade.value = withTiming(1, { duration: Motion.duration.transition });
+            return;
+        }
+        mapFade.value = withRepeat(
+            withSequence(
+                withTiming(0.4, { duration: 2800 }),
+                withTiming(0.85, { duration: 2800 })
+            ),
+            -1,
+            true
+        );
+    }, [demoState.presentationMode, mapFade]);
+
+    // Callbacks (memoized)
+    const toggleView = useCallback(() => {
+        setViewMode(prev => prev === 'signal' ? 'trails' : 'signal');
+    }, []);
+
+    const openFocus = useCallback(() => {
+        setFocusOpen(true);
+    }, []);
+
+    const closeFocus = useCallback(() => {
+        setFocusOpen(false);
+    }, []);
+
+    const toggleWindowAlert = useCallback(() => {
+        demoActions.toggleWindowAlert();
+    }, [demoActions]);
+
+    const handleResetOnboarding = useCallback(async () => {
         Alert.alert('Reset Onboarding', 'Are you sure?', [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -317,294 +319,250 @@ export default function NetworkScreen() {
                 }
             }
         ]);
-    };
+    }, [router]);
 
-    const handleClearTrails = () => {
-        // In a real app, this would clear the trail state
-        console.log('Clearing trails...');
-    };
+    const handleClearTrails = useCallback(() => {
+        clearCurrentTrail();
+    }, [clearCurrentTrail]);
 
-    const handleOpenWalks = () => {
+    const handleOpenWalks = useCallback(() => {
         router.push('/walks');
-    };
+    }, [router]);
 
-    const handleToggleLocation = () => {
+    const handleToggleLocation = useCallback(() => {
         setOverride(isInsideNetwork ? false : true);
-    };
+    }, [isInsideNetwork, setOverride]);
 
-    // Toggle View Mode
-    const toggleView = () => setViewMode(prev => prev === 'signal' ? 'trails' : 'signal');
-
-    // Determine status text and color
-    const getStatusInfo = () => {
-        if (!isInsideNetwork) {
-            return {
-                text: 'REMOTE CONNECTION',
-                color: Colors.warning,
-            };
-        }
-        if (profile?.isActivated) {
-            return {
-                text: 'ACTIVE',
-                color: Colors.accent,
-            };
-        }
+    const buildGhostPing = useCallback(() => {
+        const now = Date.now();
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 0.2 + Math.random() * 0.7;
         return {
-            text: `ACTIVATION IN ${daysRemaining} DAYS`,
-            color: Colors.primary,
+            id: `ghost-${now}`,
+            x: Math.cos(angle) * radius,
+            y: Math.sin(angle) * radius,
+            ageMinutes: 5 + Math.floor(Math.random() * 11),
         };
-    };
+    }, []);
 
-    const statusInfo = getStatusInfo();
-    const windowIsOpen = windowOpen || activeWindowMoment.isOpen;
-    const windowMinutes = activeWindowMoment.endsAt
-        ? Math.max(1, Math.ceil((activeWindowMoment.endsAt - Date.now()) / (1000 * 60)))
-        : 7;
-    const focusTitle = viewMode === 'signal' ? 'SIGNAL FIELD' : 'TRAIL RESONANCE';
+    const handleTriggerGhostPing = useCallback(() => {
+        sendGhostPing(buildGhostPing());
+    }, [sendGhostPing, buildGhostPing]);
+
+    const handleShare = useCallback(() => {
+        sharePresence({
+            stats,
+            profile,
+            encounterCount: lastEncounter ? 1 : 0, // Could be tracked properly in a real implementation
+            isInsideNetwork,
+        });
+    }, [sharePresence, stats, profile, lastEncounter, isInsideNetwork]);
+
+    // Focus overlay dimensions
     const focusSize = useMemo(() => {
         const { width, height } = Dimensions.get('window');
         return Math.min(width, height) - Spacing.xxl;
     }, []);
 
-    return (
-        <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
-            <Animated.View style={[styles.cityBreathHalo, breathStyle]} pointerEvents="none" />
-            {!presentationMode && (
-                <DevMenu
-                onToggleWindow={toggleWindow}
-                onTriggerEcho={triggerEcho}
-                onTriggerRitual={triggerRitual}
-                onTriggerWindowMoment={triggerWindow}
-                onTriggerGhostPing={() => sendGhostPing(buildGhostPing())}
-                onResetOnboarding={handleResetOnboarding}
-                onClearTrails={handleClearTrails}
-                onToggleLocation={handleToggleLocation}
-                demoPassingEchoes={demoPassingEchoes}
-                demoGhostPings={demoGhostPings}
-                demoGlyphs={demoGlyphs}
-                demoThreads={demoThreads}
-                demoWindows={demoWindows}
-                demoPatternWalks={demoPatternWalks}
-                demoSequenceActive={demoSequenceActive}
-                presentationMode={presentationMode}
-                onOpenWalks={handleOpenWalks}
-                onTogglePassingEchoes={() => setDemoPassingEchoes(prev => !prev)}
-                onToggleGhostPings={() => setDemoGhostPings(prev => !prev)}
-                onToggleGlyphs={() => setDemoGlyphs(prev => !prev)}
-                onToggleThreads={() => setDemoThreads(prev => !prev)}
-                onToggleWindows={() => setDemoWindows(prev => !prev)}
-                onTogglePatternWalks={() => setDemoPatternWalks(prev => !prev)}
-                onRunDemoSequence={() => setDemoSequenceActive(true)}
-                onTogglePresentationMode={() => setPresentationMode(prev => !prev)}
-                location={location}
-                isInsideNetwork={isInsideNetwork}
-                />
-            )}
+    const focusTitle = viewMode === 'signal' ? Copy.viewMode.signal : Copy.viewMode.trails;
 
-            <EchoOverlay echo={activeEcho} />
-            {ritual.active && (
-                <Animated.View style={[styles.ritualOverlay, { opacity: ritualOpacity }]} pointerEvents="none">
-                    <Text style={styles.ritualLabel}>QUIET RITUAL</Text>
-                    <Text style={styles.ritualPhrase}>{ritual.phrase}</Text>
-                    <Text style={styles.ritualSig}>[1010] STILLNESS LINK</Text>
-                </Animated.View>
-            )}
-            <FocusOverlay
-                visible={focusOpen}
-                title={focusTitle}
-                subtitle={viewMode === 'signal' ? 'Signal field, expanded' : 'Trail field, expanded'}
-                onClose={() => setFocusOpen(false)}
-            >
-                <View style={styles.focusStage}>
-                    {viewMode === 'signal' ? (
-                        <View style={[styles.focusStack, { width: focusSize, height: focusSize }]}>
-                            <MapBackdrop size={focusSize} opacity={mapFade} radius={24} />
-                            <SignalMap heatMap={heatMap} size={focusSize} />
-                            <DriftMarker size={focusSize} strength={isInsideNetwork ? 0.8 : 0.4} />
-                            {showThreads && <ResonanceThreadsOverlay threads={threads} size={focusSize} />}
-                            <AmbientOverlay
-                                passingEchoes={passingEchoes}
-                                ghostPings={showGhostPings ? combinedGhostPings : []}
-                                glyphs={showGlyphs ? glyphs : []}
-                            />
-                            {showWindows && (
-                                <WindowMomentOverlay
-                                    isOpen={activeWindowMoment.isOpen}
-                                    position={activeWindowMoment.position}
+    return (
+        <ErrorBoundary>
+            <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+                {/* First launch tutorial - the network reveals itself */}
+                <FirstLaunchTutorial
+                    visible={isFirstLaunch && !tutorialLoading}
+                    onComplete={markRevealSeen}
+                />
+
+                <CityBreathHalo intensity={cityBreath.intensity} periodMs={cityBreath.periodMs} />
+
+                {!demoState.presentationMode && (
+                    <DevMenu
+                        onToggleWindow={toggleWindowAlert}
+                        onTriggerEcho={triggerEcho}
+                        onTriggerRitual={triggerRitual}
+                        onTriggerWindowMoment={triggerWindow}
+                        onTriggerGhostPing={handleTriggerGhostPing}
+                        onResetOnboarding={handleResetOnboarding}
+                        onClearTrails={handleClearTrails}
+                        onToggleLocation={handleToggleLocation}
+                        onReplayTutorial={resetFirstLaunch}
+                        demoPassingEchoes={demoState.passingEchoes}
+                        demoGhostPings={demoState.ghostPings}
+                        demoGlyphs={demoState.glyphs}
+                        demoThreads={demoState.threads}
+                        demoWindows={demoState.windows}
+                        demoPatternWalks={demoState.patternWalks}
+                        demoSequenceActive={demoState.sequenceActive}
+                        presentationMode={demoState.presentationMode}
+                        onOpenWalks={handleOpenWalks}
+                        onTogglePassingEchoes={() => demoActions.toggleFeature('passingEchoes')}
+                        onToggleGhostPings={() => demoActions.toggleFeature('ghostPings')}
+                        onToggleGlyphs={() => demoActions.toggleFeature('glyphs')}
+                        onToggleThreads={() => demoActions.toggleFeature('threads')}
+                        onToggleWindows={() => demoActions.toggleFeature('windows')}
+                        onTogglePatternWalks={() => demoActions.toggleFeature('patternWalks')}
+                        onRunDemoSequence={demoActions.startSequence}
+                        onTogglePresentationMode={demoActions.togglePresentation}
+                        location={location}
+                        isInsideNetwork={isInsideNetwork}
+                    />
+                )}
+
+                <EchoOverlay echo={activeEcho} />
+                <RitualOverlay ritual={ritual} />
+
+                {/* Familiar signal overlay - shown when encountering a known signal */}
+                {familiarSignal.peerId && (
+                    <FamiliarSignalOverlay
+                        visible={familiarSignal.visible}
+                        level={resonanceMemory.getMemory(familiarSignal.peerId)?.memoryLevel ?? 0}
+                        phrase={resonanceMemory.getPhrase(familiarSignal.peerId)}
+                        encounterCount={resonanceMemory.getMemory(familiarSignal.peerId)?.encounterCount ?? 0}
+                        onComplete={handleFamiliarSignalComplete}
+                    />
+                )}
+
+                <FocusOverlay
+                    visible={focusOpen}
+                    title={focusTitle}
+                    subtitle={viewMode === 'signal' ? 'Signal field, expanded' : 'Trail field, expanded'}
+                    onClose={closeFocus}
+                >
+                    <View style={styles.focusStage}>
+                        {viewMode === 'signal' ? (
+                            <View style={[styles.focusStack, { width: focusSize, height: focusSize }]}>
+                                <MapBackdrop size={focusSize} opacity={mapFade} radius={24} />
+                                <SignalMap heatMap={heatMap} size={focusSize} />
+                                {showFog && <FogOverlay cells={exploration.fogCells} gridSize={exploration.gridSize} size={focusSize} />}
+                                <DriftMarker size={focusSize} strength={isInsideNetwork ? 0.8 : 0.4} />
+                                {showCompanions && <CompanionOverlay companions={companions} size={focusSize} />}
+                                {showThreads && <ResonanceThreadsOverlay threads={threads} size={focusSize} />}
+                                <AmbientOverlay
+                                    passingEchoes={passingEchoes}
+                                    ghostPings={showGhostPings ? combinedGhostPings : []}
+                                    glyphs={showGlyphs ? glyphs : []}
+                                />
+                                {showWindows && (
+                                    <WindowMomentOverlay
+                                        isOpen={activeWindowMoment.isOpen}
+                                        position={activeWindowMoment.position}
+                                        size={focusSize}
+                                        startedAt={activeWindowMoment.startedAt}
+                                        endsAt={activeWindowMoment.endsAt}
+                                        participantCount={peerCount + 1}
+                                    />
+                                )}
+                            </View>
+                        ) : (
+                            <View style={[styles.focusStack, { width: focusSize, height: focusSize }]}>
+                                <MapBackdrop size={focusSize} opacity={mapFade} radius={24} />
+                                <TrailVisualizer
+                                    currentTrail={currentTrail}
+                                    historicTrails={historicTrails}
+                                    isResonating={isResonating}
                                     size={focusSize}
                                 />
-                            )}
-                        </View>
-                    ) : (
-                        <View style={[styles.focusStack, { width: focusSize, height: focusSize }]}>
-                            <MapBackdrop size={focusSize} opacity={mapFade} radius={24} />
-                            <TrailVisualizer
-                                currentTrail={currentTrail}
-                                historicTrails={historicTrails}
-                                isResonating={isResonating}
-                                size={focusSize}
-                            />
-                            <DriftMarker size={focusSize} strength={isInsideNetwork ? 0.8 : 0.4} />
-                            {showPatternWalks && <PatternWalkOverlay walks={walks} activeId={activeWalk.id} size={focusSize} />}
-                            {showThreads && <ResonanceThreadsOverlay threads={threads} size={focusSize} />}
-                            <TrailAmbientOverlay
-                                passingEchoes={passingEchoes}
-                                ghostPings={showGhostPings ? combinedGhostPings : []}
-                                glyphs={showGlyphs ? glyphs : []}
-                            />
-                        </View>
-                    )}
-                </View>
-            </FocusOverlay>
-
-            <ScrollView
-                contentContainerStyle={[
-                    styles.content,
-                    { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.xxl },
-                ]}
-                showsVerticalScrollIndicator={false}
-            >
-            <View style={styles.statusStack}>
-                <TouchableOpacity onLongPress={toggleWindow} activeOpacity={1}>
-                    <Text style={[styles.header, !isInsideNetwork && { color: Colors.warning }]}>
-                        1010 NETWORK
-                    </Text>
-                </TouchableOpacity>
-                <Text style={[styles.status, { color: statusInfo.color }]}>
-                    {statusInfo.text}
-                </Text>
-                <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>{`BREATH  ${cityBreath.label}`}</Text>
-                    {realtimeEnabled && (
-                        <Text style={styles.metaText}>{`NODES  ${presenceCount}`}</Text>
-                    )}
-                    {realtimeEnabled && (
-                        <Text style={styles.metaText}>{`DENSITY  ${effectiveDensity}`}</Text>
-                    )}
-                </View>
-                {windowIsOpen && (
-                    <View style={styles.windowInline}>
-                        <Animated.View
-                            style={[
-                                styles.windowGlyph,
-                                {
-                                    opacity: windowPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.9] }),
-                                    transform: [{ scale: windowPulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.1] }) }],
-                                },
-                            ]}
-                        />
-                        <Text style={styles.windowText}>{`WINDOW OPEN  ${windowMinutes}M`}</Text>
-                    </View>
-                )}
-                {!isInsideNetwork && (
-                    <Text style={styles.warning}>⚠ SIGNAL WEAK</Text>
-                )}
-            </View>
-
-            {proximityActive && (
-                <View style={styles.proximityPanel}>
-                    <Animated.View style={[styles.proximityAura, auraStyle]} />
-                    <Text style={styles.proximityLabel}>NEAR FIELD</Text>
-                    <Text style={styles.proximityValue}>
-                        {lastEncounter ? `LINKED WITH ${lastEncounter.id}` : 'SCANNING THE CROWD'}
-                    </Text>
-                    <Text style={styles.proximityMeta}>
-                        {nearby && nearby.distance >= 0
-                            ? `${nearby.distance.toFixed(2)}m  RESONANCE ${Math.round(resonance * 100)}%`
-                            : 'SEARCHING FOR A SIGNAL'}
-                    </Text>
-                    {ritual.arming && !ritual.active && (
-                        <View style={styles.ritualPrep}>
-                            <Text style={styles.ritualPrepLabel}>HOLD STILL</Text>
-                            <View style={styles.ritualPrepTrack}>
-                                <View style={[styles.ritualPrepFill, { width: `${Math.round(ritual.armingProgress * 100)}%` }]} />
+                                {showFog && <FogOverlay cells={exploration.fogCells} gridSize={exploration.gridSize} size={focusSize} />}
+                                <DriftMarker size={focusSize} strength={isInsideNetwork ? 0.8 : 0.4} />
+                                {showCompanions && <CompanionOverlay companions={companions} size={focusSize} />}
+                                {showPatternWalks && <PatternWalkOverlay walks={walks} activeId={activeWalk.id} size={focusSize} />}
+                                {showThreads && <ResonanceThreadsOverlay threads={threads} size={focusSize} />}
+                                <TrailAmbientOverlay
+                                    passingEchoes={passingEchoes}
+                                    ghostPings={showGhostPings ? combinedGhostPings : []}
+                                    glyphs={showGlyphs ? glyphs : []}
+                                />
                             </View>
-                        </View>
-                    )}
-                    <Text style={styles.proximitySignature}>[1010] AURA THREAD</Text>
-                    {!!lastError && (
-                        <Text style={styles.proximityError}>{lastError}</Text>
-                    )}
-                </View>
-            )}
-
-            <TouchableOpacity
-                style={styles.visualizerContainer}
-                onPress={toggleView}
-                onLongPress={() => setFocusOpen(true)}
-                activeOpacity={0.8}
-            >
-                {viewMode === 'signal' ? (
-                    <View style={styles.mapStack}>
-                        <MapBackdrop size={200} opacity={mapFade} />
-                        <SignalMap heatMap={heatMap} />
-                        <DriftMarker size={200} strength={isInsideNetwork ? 0.8 : 0.4} />
-                        {showThreads && <ResonanceThreadsOverlay threads={threads} size={200} />}
-                        <AmbientOverlay
-                            passingEchoes={passingEchoes}
-                            ghostPings={showGhostPings ? combinedGhostPings : []}
-                            glyphs={showGlyphs ? glyphs : []}
-                        />
-                        {showWindows && (
-                            <WindowMomentOverlay
-                                isOpen={activeWindowMoment.isOpen}
-                                position={activeWindowMoment.position}
-                                size={200}
-                            />
                         )}
                     </View>
-                ) : (
-                    <View style={styles.trailStack}>
-                        <MapBackdrop size={300} opacity={mapFade} />
-                        <TrailVisualizer
-                            currentTrail={currentTrail}
-                            historicTrails={historicTrails}
-                            isResonating={isResonating}
-                        />
-                        <DriftMarker size={300} strength={isInsideNetwork ? 0.8 : 0.4} />
-                        {showPatternWalks && <PatternWalkOverlay walks={walks} activeId={activeWalk.id} size={300} />}
-                        {showThreads && <ResonanceThreadsOverlay threads={threads} size={300} />}
-                        <TrailAmbientOverlay
-                            passingEchoes={passingEchoes}
-                            ghostPings={showGhostPings ? combinedGhostPings : []}
-                            glyphs={showGlyphs ? glyphs : []}
-                        />
-                    </View>
-                )}
+                </FocusOverlay>
 
-            <Text style={styles.modeLabel}>
-                {viewMode === 'signal' ? 'TAP TO SWITCH • HOLD TO EXPAND' : 'TAP TO SWITCH • HOLD TO EXPAND'}
-            </Text>
-        </TouchableOpacity>
-            <TouchableOpacity style={styles.focusButton} onPress={() => setFocusOpen(true)}>
-                <Text style={styles.focusButtonText}>[ ]</Text>
-            </TouchableOpacity>
-
-            <View style={styles.lowerStack}>
-                <View style={styles.counterContainer}>
-                    <Text style={styles.counterLabel}>PARTICIPANTS</Text>
-                    <Text style={styles.counterValue}>
-                        {statsLoading ? '--' : stats.totalParticipants}
-                    </Text>
-                </View>
-                <ProximityBars strength={effectiveDensity} />
-                <Text style={styles.footer}>
-                    {isInsideNetwork
-                        ? 'Stay in 1010 to strengthen the signal.'
-                        : 'Enter 1010 postcode for full network access.'}
-                </Text>
-            </View>
-            </ScrollView>
-
-            {presentationMode && (
-                <TouchableOpacity
-                    style={[styles.presentationExit, { bottom: insets.bottom + Spacing.lg }]}
-                    onPress={() => setPresentationMode(false)}
+                <ScrollView
+                    contentContainerStyle={[
+                        styles.content,
+                        { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.xxl },
+                    ]}
+                    showsVerticalScrollIndicator={false}
                 >
-                    <Text style={styles.presentationExitText}>EXIT DEMO</Text>
-                </TouchableOpacity>
-            )}
-        </SafeAreaView>
+                    <NetworkHeader
+                        isInsideNetwork={isInsideNetwork}
+                        isActivated={profile?.isActivated ?? false}
+                        daysRemaining={daysRemaining}
+                        breathLabel={cityBreath.label}
+                        presenceCount={presenceCount}
+                        densityScore={effectiveDensity}
+                        realtimeEnabled={realtimeEnabled}
+                        windowIsOpen={windowIsOpen}
+                        windowMinutes={windowMinutes}
+                        windowPulse={windowPulse}
+                        onLongPress={toggleWindowAlert}
+                    />
+
+                    <SignalVisualization
+                        viewMode={viewMode}
+                        onToggleView={toggleView}
+                        onLongPress={openFocus}
+                        isInsideNetwork={isInsideNetwork}
+                        mapOpacity={mapFade}
+                        heatMap={heatMap}
+                        currentTrail={currentTrail}
+                        historicTrails={historicTrails}
+                        isResonating={isResonating}
+                        passingEchoes={passingEchoes}
+                        ghostPings={combinedGhostPings}
+                        glyphs={glyphs}
+                        threads={threads}
+                        showThreads={showThreads}
+                        showGhostPings={showGhostPings}
+                        showGlyphs={showGlyphs}
+                        showWindows={showWindows}
+                        showPatternWalks={showPatternWalks}
+                        windowMoment={activeWindowMoment}
+                        walks={walks}
+                        activeWalkId={activeWalk.id}
+                        fogCells={exploration.fogCells}
+                        gridSize={exploration.gridSize}
+                        showFog={showFog}
+                        companions={companions}
+                        showCompanions={showCompanions}
+                    />
+
+                    {/* Temporal slider - time travel through network history */}
+                    <TemporalSlider
+                        mode={temporalLayers.mode}
+                        isLive={temporalLayers.isLive}
+                        isLoading={temporalLayers.isLoading}
+                        snapshot={temporalLayers.snapshot}
+                        scrubPosition={temporalLayers.scrubPosition}
+                        onCycleMode={temporalLayers.cycleMode}
+                        onScrub={temporalLayers.scrub}
+                        getModeLabel={temporalLayers.getModeLabel}
+                    />
+
+                    <NetworkFooter
+                        participantCount={stats.totalParticipants}
+                        isLoading={statsLoading}
+                        densityScore={effectiveDensity}
+                        isInsideNetwork={isInsideNetwork}
+                        onShare={handleShare}
+                    />
+                </ScrollView>
+
+                {demoState.presentationMode && (
+                    <TouchableOpacity
+                        style={[styles.presentationExit, { bottom: insets.bottom + Spacing.lg }]}
+                        onPress={demoActions.togglePresentation}
+                        accessibilityLabel="Exit demo mode"
+                        accessibilityRole="button"
+                        accessibilityHint="Exits the presentation demo mode"
+                    >
+                        <Text style={styles.presentationExitText}>EXIT DEMO</Text>
+                    </TouchableOpacity>
+                )}
+            </SafeAreaView>
+        </ErrorBoundary>
     );
 }
 
@@ -617,115 +575,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: Spacing.lg,
     },
-    cityBreathHalo: {
-        position: 'absolute',
-        width: 320,
-        height: 320,
-        borderRadius: 160,
-        backgroundColor: Colors.surfaceHighlight,
-    },
-    header: {
-        color: Colors.primary,
-        fontSize: Typography.size.lg,
-        fontWeight: 'bold',
-        marginBottom: Spacing.xs,
-        letterSpacing: 2,
-    },
-    status: {
-        color: Colors.secondary,
-        fontSize: Typography.size.xs,
-        marginBottom: Spacing.sm,
-        letterSpacing: 1,
-        fontFamily: Typography.mono,
-    },
-    statusStack: {
+    focusStage: {
         alignItems: 'center',
-        marginBottom: Spacing.lg,
-    },
-    metaRow: {
-        flexDirection: 'row',
-        marginBottom: Spacing.sm,
-    },
-    metaText: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        fontFamily: Typography.mono,
-        marginHorizontal: Spacing.xs,
-    },
-    ritualOverlay: {
-        position: 'absolute',
-        left: Spacing.lg,
-        right: Spacing.lg,
-        top: '35%',
-        padding: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.surfaceHighlight,
-        backgroundColor: 'rgba(5, 5, 5, 0.88)',
-        alignItems: 'center',
-        zIndex: 220,
-    },
-    ritualLabel: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        marginBottom: Spacing.sm,
-        fontFamily: Typography.mono,
-    },
-    ritualPhrase: {
-        color: Colors.primary,
-        fontSize: Typography.size.lg,
-        textAlign: 'center',
-        letterSpacing: 1,
-        fontFamily: Typography.mono,
-    },
-    ritualSig: {
-        color: Colors.secondary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        marginTop: Spacing.md,
-        fontFamily: Typography.mono,
-    },
-    warning: {
-        color: Colors.warning,
-        fontSize: Typography.size.xs,
-        marginBottom: Spacing.sm,
-        letterSpacing: 2,
-        fontFamily: Typography.mono,
-    },
-    windowInline: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-        marginBottom: Spacing.sm,
-    },
-    windowGlyph: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        borderWidth: 1,
-        borderColor: Colors.warning,
-    },
-    windowText: {
-        color: Colors.warning,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        fontFamily: Typography.mono,
-    },
-    visualizerContainer: {
-        height: 200,
         justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: Spacing.xl,
     },
-    mapStack: {
-        width: 200,
-        height: 200,
-        position: 'relative',
-    },
-    trailStack: {
-        width: 300,
-        height: 300,
+    focusStack: {
         position: 'relative',
     },
     presentationExit: {
@@ -742,136 +596,5 @@ const styles = StyleSheet.create({
         fontSize: Typography.size.xs,
         letterSpacing: 2,
         fontFamily: Typography.mono,
-    },
-    proximityPanel: {
-        alignItems: 'center',
-        marginBottom: Spacing.xl,
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.glass,
-        borderRadius: 8,
-        overflow: 'hidden',
-    },
-    proximityAura: {
-        position: 'absolute',
-        width: 220,
-        height: 220,
-        borderRadius: 110,
-        backgroundColor: Colors.surfaceHighlight,
-    },
-    proximitySignature: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        marginTop: Spacing.sm,
-        fontFamily: Typography.mono,
-    },
-    proximityLabel: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        marginBottom: Spacing.xs,
-        fontFamily: Typography.mono,
-    },
-    proximityValue: {
-        color: Colors.primary,
-        fontSize: Typography.size.md,
-        letterSpacing: 1,
-        fontFamily: Typography.mono,
-    },
-    proximityMeta: {
-        color: Colors.secondary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 1,
-        marginTop: Spacing.xs,
-        fontFamily: Typography.mono,
-    },
-    ritualPrep: {
-        marginTop: Spacing.sm,
-        width: 160,
-        alignItems: 'center',
-    },
-    ritualPrepLabel: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        fontFamily: Typography.mono,
-        marginBottom: Spacing.xs,
-    },
-    ritualPrepTrack: {
-        width: '100%',
-        height: 4,
-        borderWidth: 1,
-        borderColor: Colors.surfaceHighlight,
-    },
-    ritualPrepFill: {
-        height: '100%',
-        backgroundColor: Colors.tertiary,
-    },
-    proximityError: {
-        color: Colors.warning,
-        fontSize: Typography.size.xs,
-        marginTop: Spacing.xs,
-        fontFamily: Typography.mono,
-    },
-    modeLabel: {
-        position: 'absolute',
-        bottom: Spacing.sm,
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        fontFamily: Typography.mono,
-    },
-    focusButton: {
-        marginTop: -Spacing.xs,
-        marginBottom: Spacing.lg,
-        paddingVertical: Spacing.xs,
-        paddingHorizontal: Spacing.sm,
-        borderWidth: 1,
-        borderColor: Colors.surfaceHighlight,
-    },
-    focusButtonText: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        fontFamily: Typography.mono,
-    },
-    counterContainer: {
-        alignItems: 'center',
-        marginBottom: Spacing.lg,
-    },
-    counterLabel: {
-        color: Colors.secondary,
-        fontSize: Typography.size.xs,
-        marginBottom: Spacing.xs,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        fontFamily: Typography.mono,
-    },
-    counterValue: {
-        color: Colors.primary,
-        fontSize: 64,
-        fontWeight: 'bold',
-        fontVariant: ['tabular-nums'],
-    },
-    footer: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        textAlign: 'center',
-        marginTop: Spacing.lg,
-        fontFamily: Typography.mono,
-        letterSpacing: 1,
-    },
-    lowerStack: {
-        alignItems: 'center',
-        marginTop: Spacing.lg,
-    },
-    focusStage: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    focusStack: {
-        position: 'relative',
     },
 });

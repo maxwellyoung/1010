@@ -13,6 +13,7 @@ interface DevMenuProps {
     onResetOnboarding: () => void;
     onClearTrails: () => void;
     onToggleLocation: () => void;
+    onReplayTutorial?: () => void;
     demoPassingEchoes: boolean;
     demoGhostPings: boolean;
     demoGlyphs: boolean;
@@ -43,6 +44,7 @@ export const DevMenu: React.FC<DevMenuProps> = ({
     onTriggerRitual,
     onTriggerWindowMoment,
     onTriggerGhostPing,
+    onReplayTutorial,
     demoPassingEchoes,
     demoGhostPings,
     demoGlyphs,
@@ -141,6 +143,12 @@ export const DevMenu: React.FC<DevMenuProps> = ({
                                 <TouchableOpacity style={styles.button} onPress={onClearTrails}>
                                     <Text style={styles.buttonText}>CLEAR TRAILS</Text>
                                 </TouchableOpacity>
+
+                                {onReplayTutorial && (
+                                    <TouchableOpacity style={styles.button} onPress={onReplayTutorial}>
+                                        <Text style={styles.buttonText}>REPLAY TUTORIAL</Text>
+                                    </TouchableOpacity>
+                                )}
 
                                 <TouchableOpacity style={[styles.button, styles.dangerButton]} onPress={onResetOnboarding}>
                                     <Text style={styles.dangerButtonText}>RESET ONBOARDING</Text>

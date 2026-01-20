@@ -6,6 +6,7 @@ import Animated, {
     withRepeat,
     withTiming,
     withSequence,
+    interpolateColor,
 } from 'react-native-reanimated';
 import { Colors, Typography, Spacing } from '../constants/Theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,10 +35,17 @@ export const WindowAlert: React.FC<WindowAlertProps> = ({ visible, minutesRemain
         }
     }, [visible]);
 
-    const animatedStyle = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-        borderColor: `rgba(255, 170, 0, ${opacity.value})`,
-    }));
+    const animatedStyle = useAnimatedStyle(() => {
+        const borderColor = interpolateColor(
+            opacity.value,
+            [0, 0.5, 1],
+            ['rgba(255, 170, 0, 0)', 'rgba(255, 170, 0, 0.5)', 'rgba(255, 170, 0, 1)']
+        );
+        return {
+            opacity: opacity.value,
+            borderColor,
+        };
+    });
 
     if (!visible) return null;
 

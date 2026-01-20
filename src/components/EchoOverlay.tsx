@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
     useSharedValue,
@@ -6,37 +6,37 @@ import Animated, {
     withTiming,
     withSequence,
     withRepeat,
-    Easing,
 } from 'react-native-reanimated';
 import { Colors, Typography, Spacing } from '../constants/Theme';
+import { Motion } from '../constants/Motion';
+import { Copy } from '../constants/Copy';
 import { Echo } from '../hooks/useEchoes';
 
 interface EchoOverlayProps {
     echo: Echo | null;
 }
 
-export const EchoOverlay: React.FC<EchoOverlayProps> = ({ echo }) => {
+export const EchoOverlay = memo<EchoOverlayProps>(({ echo }) => {
     const opacity = useSharedValue(0);
     const glitchX = useSharedValue(0);
 
     useEffect(() => {
         if (echo) {
-            opacity.value = withTiming(1, { duration: 200 });
+            opacity.value = withTiming(1, { duration: Motion.duration.interaction });
 
-            // Glitch effect
-            glitchX.value = withRepeat(
-                withSequence(
-                    withTiming(5, { duration: 50 }),
-                    withTiming(-5, { duration: 50 }),
-                    withTiming(0, { duration: 50 })
-                ),
-                10,
-                true
+            // Subtle glitch effect - reduced from ±5px to ±2px, fewer repeats
+            glitchX.value = withSequence(
+                withTiming(2, { duration: 60 }),
+                withTiming(-2, { duration: 60 }),
+                withTiming(1, { duration: 40 }),
+                withTiming(-1, { duration: 40 }),
+                withTiming(0, { duration: 60 })
             );
         } else {
-            opacity.value = withTiming(0, { duration: 500 });
+            opacity.value = withTiming(0, { duration: Motion.duration.transition });
+            glitchX.value = withTiming(0, { duration: 100 });
         }
-    }, [echo]);
+    }, [echo, opacity, glitchX]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         opacity: opacity.value,
@@ -48,13 +48,13 @@ export const EchoOverlay: React.FC<EchoOverlayProps> = ({ echo }) => {
     return (
         <View style={styles.container} pointerEvents="none">
             <Animated.View style={[styles.content, animatedStyle]}>
-                <Text style={styles.label}>ECHO DETECTED</Text>
+                <Text style={styles.label}>{Copy.echo.label}</Text>
                 <Text style={styles.message}>{echo.message}</Text>
                 <Text style={styles.timestamp}>{new Date(echo.timestamp).toLocaleTimeString()}</Text>
             </Animated.View>
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {

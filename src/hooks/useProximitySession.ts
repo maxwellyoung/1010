@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { AppState } from 'react-native';
 import { Proximity } from '../native/Proximity';
+import { supabase, isSupabaseConfigured, getCurrentUserId } from '../lib/supabase';
+import { useLocation } from '../context/LocationContext';
 
 type PeerState = Record<string, number>;
 
@@ -10,31 +12,117 @@ type NearbyObject = {
     direction: number[];
 };
 
+export type Encounter = {
+    id: string;
+    peerId: string;
+    at: number;
+    durationMs: number;
+    maxResonance: number;
+    ritualTriggered: boolean;
+    lat?: number;
+    lng?: number;
+};
+
+// Event types for proximity native module
+type PeerFoundEvent = { id: string };
+type PeerLostEvent = { id: string };
+type SessionStateEvent = { id: string; state: number };
+type NearbyUpdateEvent = { objects: NearbyObject[] };
+type ErrorEvent = { source: string; message: string };
+
 export const useProximitySession = (displayName?: string) => {
+    const { location } = useLocation();
     const [isActive, setIsActive] = useState(false);
     const [peerStates, setPeerStates] = useState<PeerState>({});
-    const [lastEncounter, setLastEncounter] = useState<{ id: string; at: number } | null>(null);
+    const [lastEncounter, setLastEncounter] = useState<Encounter | null>(null);
+    const [encounters, setEncounters] = useState<Encounter[]>([]);
     const [nearby, setNearby] = useState<NearbyObject | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
-    const startedRef = useRef(false);
 
-    const start = () => {
+    const startedRef = useRef(false);
+    const encounterStartRef = useRef<Map<string, { at: number; maxResonance: number }>>(new Map());
+
+    const start = useCallback(() => {
         if (!Proximity.isSupported || startedRef.current) {
             return;
         }
         Proximity.start({ displayName });
         startedRef.current = true;
         setIsActive(true);
-    };
+    }, [displayName]);
 
-    const stop = () => {
+    const stop = useCallback(() => {
         if (!Proximity.isSupported || !startedRef.current) {
             return;
         }
         Proximity.stop();
         startedRef.current = false;
         setIsActive(false);
-    };
+    }, []);
+
+    // Save encounter to Supabase
+    const saveEncounter = useCallback(async (encounter: Encounter) => {
+        if (!isSupabaseConfigured) return;
+
+        const userId = await getCurrentUserId();
+        if (!userId) return;
+
+        try {
+            const { error } = await supabase.from('encounters').insert({
+                profile_a: userId,
+                profile_b: encounter.peerId,
+                lat: encounter.lat,
+                lng: encounter.lng,
+                duration_ms: encounter.durationMs,
+                max_resonance: encounter.maxResonance,
+                ritual_triggered: encounter.ritualTriggered,
+            });
+
+            if (error) {
+                console.warn('[PROXIMITY] Failed to save encounter:', error.message);
+            } else {
+                console.log('[PROXIMITY] Encounter saved');
+            }
+        } catch (err) {
+            console.error('[PROXIMITY] Error saving encounter:', err);
+        }
+    }, []);
+
+    // Finalize an encounter when peer is lost
+    const finalizeEncounter = useCallback((peerId: string, ritualTriggered: boolean = false) => {
+        const startData = encounterStartRef.current.get(peerId);
+        if (!startData) return;
+
+        const now = Date.now();
+        const durationMs = now - startData.at;
+
+        // Only record encounters longer than 2 seconds
+        if (durationMs < 2000) {
+            encounterStartRef.current.delete(peerId);
+            return;
+        }
+
+        const encounter: Encounter = {
+            id: `${peerId}-${startData.at}`,
+            peerId,
+            at: startData.at,
+            durationMs,
+            maxResonance: startData.maxResonance,
+            ritualTriggered,
+            lat: location?.coords.latitude,
+            lng: location?.coords.longitude,
+        };
+
+        setEncounters(prev => [...prev.slice(-9), encounter]); // Keep last 10
+        setLastEncounter(encounter);
+        saveEncounter(encounter);
+        encounterStartRef.current.delete(peerId);
+    }, [location, saveEncounter]);
+
+    // Mark encounter as having triggered ritual
+    const markRitualTriggered = useCallback((peerId: string) => {
+        finalizeEncounter(peerId, true);
+    }, [finalizeEncounter]);
 
     useEffect(() => {
         if (!Proximity.isSupported) {
@@ -52,32 +140,57 @@ export const useProximitySession = (displayName?: string) => {
         });
 
         const subs = [
-            Proximity.addListener('onPeerFound', event => {
-                setPeerStates(prev => ({ ...prev, [event.id]: 1 }));
+            Proximity.addListener('onPeerFound', (event) => {
+                const { id } = event as PeerFoundEvent;
+                setPeerStates(prev => ({ ...prev, [id]: 1 }));
             }),
-            Proximity.addListener('onPeerLost', event => {
+            Proximity.addListener('onPeerLost', (event) => {
+                const { id } = event as PeerLostEvent;
+                // Finalize encounter before removing peer
+                finalizeEncounter(id);
+
                 setPeerStates(prev => {
                     const next = { ...prev };
-                    delete next[event.id];
+                    delete next[id];
                     return next;
                 });
             }),
-            Proximity.addListener('onSessionState', event => {
-                setPeerStates(prev => ({ ...prev, [event.id]: event.state }));
-                if (event.state === 2) {
-                    setLastEncounter({ id: event.id, at: Date.now() });
+            Proximity.addListener('onSessionState', (event) => {
+                const { id, state } = event as SessionStateEvent;
+                setPeerStates(prev => ({ ...prev, [id]: state }));
+
+                // State 2 = connected, start tracking encounter
+                if (state === 2) {
+                    if (!encounterStartRef.current.has(id)) {
+                        encounterStartRef.current.set(id, {
+                            at: Date.now(),
+                            maxResonance: 0,
+                        });
+                    }
                 }
             }),
-            Proximity.addListener('onNearbyUpdate', event => {
-                const best = event.objects
-                    .filter(obj => obj.distance >= 0)
-                    .sort((a, b) => a.distance - b.distance)[0];
+            Proximity.addListener('onNearbyUpdate', (event) => {
+                const { objects } = event as NearbyUpdateEvent;
+                const best = objects
+                    .filter((obj: NearbyObject) => obj.distance >= 0)
+                    .sort((a: NearbyObject, b: NearbyObject) => a.distance - b.distance)[0];
+
                 if (best) {
                     setNearby(best);
+
+                    // Update max resonance for this encounter
+                    const startData = encounterStartRef.current.get(best.id);
+                    if (startData) {
+                        const resonance = 1 - Math.min(best.distance / 3, 1);
+                        if (resonance > startData.maxResonance) {
+                            startData.maxResonance = resonance;
+                        }
+                    }
                 }
             }),
-            Proximity.addListener('onError', event => {
-                setLastError(`${event.source}: ${event.message}`);
+            Proximity.addListener('onError', (event) => {
+                const { source, message } = event as { source: string; message: string };
+                setLastError(`${source}: ${message}`);
             })
         ];
 
@@ -86,7 +199,7 @@ export const useProximitySession = (displayName?: string) => {
             subs.forEach(sub => sub.remove());
             stop();
         };
-    }, [displayName]);
+    }, [start, stop, finalizeEncounter]);
 
     const resonance = useMemo(() => {
         if (!nearby || nearby.distance < 0) {
@@ -96,12 +209,20 @@ export const useProximitySession = (displayName?: string) => {
         return Math.max(0, normalized);
     }, [nearby]);
 
+    // Count of connected peers (state === 2)
+    const connectedPeerCount = useMemo(() => {
+        return Object.values(peerStates).filter(state => state === 2).length;
+    }, [peerStates]);
+
     return {
         isActive,
         peerStates,
         lastEncounter,
+        encounters,
         nearby,
         resonance,
-        lastError
+        lastError,
+        connectedPeerCount,
+        markRitualTriggered,
     };
 };

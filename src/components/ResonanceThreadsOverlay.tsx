@@ -1,8 +1,15 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, { Line, Circle, Text as SvgText } from 'react-native-svg';
-import { Colors, Typography } from '../constants/Theme';
+import Svg, { Line, Circle } from 'react-native-svg';
+import { Colors } from '../constants/Theme';
 import type { ResonanceThread } from '../hooks/useResonanceThreads';
+
+/**
+ * Resonance Threads Overlay - Journey-inspired
+ *
+ * Subtle connection lines. No labels. No glyphs.
+ * Connections speak through geometry, not symbols.
+ */
 
 interface ResonanceThreadsOverlayProps {
     threads: ResonanceThread[];
@@ -16,32 +23,33 @@ export const ResonanceThreadsOverlay: React.FC<ResonanceThreadsOverlayProps> = (
         return null;
     }
 
-    const glyphs = ['<>', '[]', '::', '—', '∙'];
+    // Limit to 3 threads max - less visual noise
+    const limitedThreads = threads.slice(0, 3);
 
     return (
         <View style={[styles.container, { width: size, height: size }]} pointerEvents="none">
             <Svg width={size} height={size}>
-                {threads.map(thread => {
+                {limitedThreads.map(thread => {
                     const x1 = mapCoord(thread.from.x, size);
                     const y1 = mapCoord(thread.from.y, size);
                     const x2 = mapCoord(thread.to.x, size);
                     const y2 = mapCoord(thread.to.y, size);
-                    const glyph = glyphs[Math.abs(thread.id.length + Math.floor(x1 + y1)) % glyphs.length];
+
                     return (
                         <React.Fragment key={thread.id}>
-                            <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={Colors.tertiary} strokeWidth={0.6} opacity={0.35} />
-                            <Circle cx={x1} cy={y1} r={2} fill={Colors.surfaceHighlight} opacity={0.6} />
-                            <Circle cx={x2} cy={y2} r={2} fill={Colors.surfaceHighlight} opacity={0.6} />
-                            <SvgText
-                                x={x1 + 6}
-                                y={y1 - 2}
-                                fill={Colors.tertiary}
-                                fontSize={8}
-                                fontFamily={Typography.mono}
-                                opacity={0.6}
-                            >
-                                {glyph}
-                            </SvgText>
+                            {/* Subtle connection line */}
+                            <Line
+                                x1={x1}
+                                y1={y1}
+                                x2={x2}
+                                y2={y2}
+                                stroke={Colors.surfaceHighlight}
+                                strokeWidth={0.5}
+                                opacity={0.25}
+                            />
+                            {/* Endpoint dots */}
+                            <Circle cx={x1} cy={y1} r={2} fill={Colors.tertiary} opacity={0.3} />
+                            <Circle cx={x2} cy={y2} r={2} fill={Colors.tertiary} opacity={0.3} />
                         </React.Fragment>
                     );
                 })}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { GhostPing } from './useGhostPings';
 
@@ -93,34 +93,40 @@ export const useSupabaseSignals = () => {
         };
     }, []);
 
-    const sendGhostPing = async (ghost: GhostPing) => {
+    const sendGhostPing = useCallback(async (ghost: GhostPing) => {
         if (!isSupabaseConfigured || !channelRef.current) return;
         await channelRef.current.send({ type: 'broadcast', event: 'ghost', payload: ghost });
-    };
+    }, []);
 
-    const sendWindowMoment = async (moment: WindowMomentSignal) => {
+    const sendWindowMoment = useCallback(async (moment: WindowMomentSignal) => {
         if (!isSupabaseConfigured || !channelRef.current) return;
         await channelRef.current.send({ type: 'broadcast', event: 'window', payload: moment });
-    };
+    }, []);
+
+    const mappedGhostPings = useMemo(
+        () => ghostPings.map(({ receivedAt, ...ghost }) => ghost),
+        [ghostPings]
+    );
 
     return useMemo(() => ({
-        ghostPings: ghostPings.map(({ receivedAt, ...ghost }) => ghost),
+        ghostPings: mappedGhostPings,
         windowMoment,
         sendGhostPing,
         sendWindowMoment,
         isConfigured: isSupabaseConfigured,
         presenceCount,
         recentPresenceCount,
-    }), [ghostPings, windowMoment, presenceCount, recentPresenceCount]);
+    }), [mappedGhostPings, windowMoment, sendGhostPing, sendWindowMoment, presenceCount, recentPresenceCount]);
 };
 
-const countRecentPresence = (state: Record<string, Array<{ online_at?: string }>>) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const countRecentPresence = (state: Record<string, any[]>) => {
     const now = Date.now();
     const cutoff = now - 15 * 60 * 1000;
     return Object.values(state).reduce((count, presences) => {
         const latest = presences
-            .map(presence => (presence.online_at ? Date.parse(presence.online_at) : 0))
-            .sort((a, b) => b - a)[0];
+            .map((presence: { online_at?: string }) => (presence.online_at ? Date.parse(presence.online_at) : 0))
+            .sort((a: number, b: number) => b - a)[0];
         if (latest && latest >= cutoff) {
             return count + 1;
         }
