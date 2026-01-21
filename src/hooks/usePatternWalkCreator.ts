@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { supabase, isSupabaseConfigured, getCurrentUserId } from '../lib/supabase';
+import { useMutation } from 'convex/react';
+import { isConvexConfigured, getDeviceId } from '../lib/convex';
+import { api } from '../../convex/_generated/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DEFAULT_ZONE, normalizedToCoords } from '../config/NetworkZones';
+import { DEFAULT_ZONE } from '../config/NetworkZones';
 import * as Crypto from 'expo-crypto';
 
 /**
@@ -80,7 +82,18 @@ export function usePatternWalkCreator() {
     const [currentPoints, setCurrentPoints] = useState<WalkPoint[]>([]);
     const [savedWalks, setSavedWalks] = useState<PatternWalk[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [deviceId, setDeviceId] = useState<string | null>(null);
     const recordStartRef = useRef<number | null>(null);
+
+    // Convex mutation
+    const insertPatternWalk = useMutation(api.mutations.patternWalks.insertPatternWalk);
+
+    // Initialize device ID
+    useEffect(() => {
+        if (isConvexConfigured) {
+            getDeviceId().then(setDeviceId);
+        }
+    }, []);
 
     // Load saved walks on mount
     useEffect(() => {
@@ -197,35 +210,27 @@ export function usePatternWalkCreator() {
 
     // Share a walk to the network
     const shareWalk = useCallback(async (walkId: string): Promise<boolean> => {
-        if (!isSupabaseConfigured) return false;
+        if (!isConvexConfigured || !deviceId) return false;
 
         const walk = savedWalks.find(w => w.id === walkId);
         if (!walk) return false;
 
-        const userId = await getCurrentUserId();
-        if (!userId) return false;
-
         try {
-            // Upload to Supabase
-            const { error } = await supabase.from('pattern_walks').insert({
+            // Upload to Convex
+            await insertPatternWalk({
                 id: walk.id,
-                created_by: userId,
+                createdBy: deviceId,
                 name: walk.name,
                 description: walk.description,
                 points: walk.points,
-                duration_ms: walk.duration,
-                distance_meters: walk.distance,
-                is_shared: true,
+                durationMs: walk.duration,
+                distanceMeters: walk.distance,
+                isShared: true,
             });
-
-            if (error) {
-                console.error('[WALK] Supabase share failed:', error.message);
-                return false;
-            }
 
             // Update local state
             const updated = savedWalks.map(w =>
-                w.id === walkId ? { ...w, isShared: true, creatorId: userId } : w
+                w.id === walkId ? { ...w, isShared: true, creatorId: deviceId } : w
             );
             setSavedWalks(updated);
             await AsyncStorage.setItem(WALKS_CACHE_KEY, JSON.stringify(updated));
@@ -236,7 +241,7 @@ export function usePatternWalkCreator() {
             console.error('[WALK] Share failed:', err);
             return false;
         }
-    }, [savedWalks]);
+    }, [deviceId, savedWalks, insertPatternWalk]);
 
     // Current walk stats
     const currentStats = useMemo(() => {

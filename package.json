@@ -13,11 +13,12 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
     "@maplibre/maplibre-react-native": "^10.4.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@sentry/react-native": "^7.8.0",
-    "@supabase/supabase-js": "^2.84.0",
     "babel-preset-expo": "~54.0.0",
+    "convex": "^1.31.5",
     "expo": "~54.0.25",
     "expo-av": "^16.0.8",
     "expo-blur": "^15.0.8",
@@ -38,7 +39,6 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "^15.12.1",
-    "react-native-url-polyfill": "^3.0.0",
     "react-native-worklets": "^0.5.1"
   },
   "devDependencies": {

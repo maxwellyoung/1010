@@ -9,7 +9,7 @@ import Animated, {
     Easing,
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { Colors, Typography, Spacing } from '../../src/constants/Theme';
+import { Colors, Typography, Spacing, Layout } from '../../src/constants/Theme';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlyphReveal } from '../../src/components/GlyphReveal';
 
@@ -81,10 +81,10 @@ export default function WelcomeScreen() {
                     {contentReady && (
                         <>
                             <Animated.Text style={[styles.logo, logoStyle]}>1010</Animated.Text>
-                            <Animated.Text style={[styles.subtitle, subtitleStyle]}>NETWORK</Animated.Text>
+                            <Animated.Text style={[styles.subtitle, subtitleStyle]}>Network</Animated.Text>
                             <Animated.Text style={[styles.description, descriptionStyle]}>
-                                A presence layer for this place.{'\n'}
-                                The network remembers you here.
+                                Feel who's nearby without the noise.{'\n'}
+                                Presence, not profiles.
                             </Animated.Text>
                         </>
                     )}
@@ -96,14 +96,14 @@ export default function WelcomeScreen() {
                             style={styles.button}
                             onPress={() => router.push('/onboarding/permissions')}
                             activeOpacity={0.7}
-                            accessibilityLabel="Enter the network"
+                            accessibilityLabel="Get started"
                             accessibilityRole="button"
                             accessibilityHint="Begins the network setup process"
                         >
-                            <Text style={styles.buttonText}>ENTER THE NETWORK</Text>
+                            <Text style={styles.buttonText}>Get started</Text>
                         </TouchableOpacity>
                         <Text style={styles.hint}>
-                            You'll be asked for location access
+                            Location access required
                         </Text>
                     </Animated.View>
                 )}
@@ -134,47 +134,46 @@ const styles = StyleSheet.create({
     },
     logo: {
         color: Colors.primary,
-        fontSize: 72,
-        fontFamily: Typography.mono,
-        fontWeight: '100',
-        letterSpacing: 8,
+        fontSize: Typography.size.jumbo,
+        fontFamily: Typography.sans,
+        fontWeight: '200',
+        letterSpacing: 6,
     },
     subtitle: {
         color: Colors.tertiary,
         fontSize: Typography.size.sm,
-        fontFamily: Typography.mono,
+        fontFamily: Typography.sansMedium,
         textTransform: 'uppercase',
-        letterSpacing: 6,
-        marginTop: Spacing.sm,
+        letterSpacing: Typography.letterSpacing.wider,
+        marginTop: Spacing.md,
         marginBottom: Spacing.xxl,
     },
     description: {
-        color: Colors.primary,
-        fontSize: Typography.size.sm,
-        fontFamily: Typography.mono,
+        color: Colors.secondary,
+        fontSize: Typography.size.base,
+        fontFamily: Typography.sans,
         textAlign: 'center',
-        lineHeight: 24,
-        letterSpacing: 0.3,
+        lineHeight: 26,
+        maxWidth: 280,
     },
     button: {
         backgroundColor: Colors.primary,
         paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.xl,
+        paddingHorizontal: Spacing.xxl,
         alignItems: 'center',
+        borderRadius: Layout.radius.md,
     },
     buttonText: {
         color: Colors.background,
-        fontSize: Typography.size.xs,
-        fontFamily: Typography.mono,
-        fontWeight: '500',
-        letterSpacing: 3,
+        fontSize: Typography.size.sm,
+        fontFamily: Typography.sansSemiBold,
+        letterSpacing: Typography.letterSpacing.wide,
     },
     hint: {
-        color: Colors.quaternary,
-        fontSize: Typography.size.xs,
-        fontFamily: Typography.mono,
+        color: Colors.tertiary,
+        fontSize: Typography.size.sm,
+        fontFamily: Typography.sans,
         textAlign: 'center',
         marginTop: Spacing.md,
-        letterSpacing: 1,
     },
 });

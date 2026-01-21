@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { AppState } from 'react-native';
+import { useMutation } from 'convex/react';
 import { Proximity } from '../native/Proximity';
-import { supabase, isSupabaseConfigured, getCurrentUserId } from '../lib/supabase';
+import { isConvexConfigured, getDeviceId } from '../lib/convex';
+import { api } from '../../convex/_generated/api';
 import { useLocation } from '../context/LocationContext';
 
 type PeerState = Record<string, number>;
@@ -28,7 +30,6 @@ type PeerFoundEvent = { id: string };
 type PeerLostEvent = { id: string };
 type SessionStateEvent = { id: string; state: number };
 type NearbyUpdateEvent = { objects: NearbyObject[] };
-type ErrorEvent = { source: string; message: string };
 
 export const useProximitySession = (displayName?: string) => {
     const { location } = useLocation();
@@ -38,9 +39,20 @@ export const useProximitySession = (displayName?: string) => {
     const [encounters, setEncounters] = useState<Encounter[]>([]);
     const [nearby, setNearby] = useState<NearbyObject | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
+    const [deviceId, setDeviceId] = useState<string | null>(null);
 
     const startedRef = useRef(false);
     const encounterStartRef = useRef<Map<string, { at: number; maxResonance: number }>>(new Map());
+
+    // Convex mutation
+    const insertEncounter = useMutation(api.mutations.encounters.insertEncounter);
+
+    // Initialize device ID
+    useEffect(() => {
+        if (isConvexConfigured) {
+            getDeviceId().then(setDeviceId);
+        }
+    }, []);
 
     const start = useCallback(() => {
         if (!Proximity.isSupported || startedRef.current) {
@@ -60,33 +72,25 @@ export const useProximitySession = (displayName?: string) => {
         setIsActive(false);
     }, []);
 
-    // Save encounter to Supabase
+    // Save encounter to Convex
     const saveEncounter = useCallback(async (encounter: Encounter) => {
-        if (!isSupabaseConfigured) return;
-
-        const userId = await getCurrentUserId();
-        if (!userId) return;
+        if (!isConvexConfigured || !deviceId) return;
 
         try {
-            const { error } = await supabase.from('encounters').insert({
-                profile_a: userId,
-                profile_b: encounter.peerId,
+            await insertEncounter({
+                deviceA: deviceId,
+                deviceB: encounter.peerId,
                 lat: encounter.lat,
                 lng: encounter.lng,
-                duration_ms: encounter.durationMs,
-                max_resonance: encounter.maxResonance,
-                ritual_triggered: encounter.ritualTriggered,
+                durationMs: encounter.durationMs,
+                maxResonance: encounter.maxResonance,
+                ritualTriggered: encounter.ritualTriggered,
             });
-
-            if (error) {
-                console.warn('[PROXIMITY] Failed to save encounter:', error.message);
-            } else {
-                console.log('[PROXIMITY] Encounter saved');
-            }
+            console.log('[PROXIMITY] Encounter saved');
         } catch (err) {
             console.error('[PROXIMITY] Error saving encounter:', err);
         }
-    }, []);
+    }, [deviceId, insertEncounter]);
 
     // Finalize an encounter when peer is lost
     const finalizeEncounter = useCallback((peerId: string, ritualTriggered: boolean = false) => {

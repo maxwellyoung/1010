@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { supabase, isSupabaseConfigured, getCurrentUserId } from '../lib/supabase';
+import { useMutation } from 'convex/react';
+import { isConvexConfigured, getDeviceId } from '../lib/convex';
+import { api } from '../../convex/_generated/api';
 
 export type WindowMoment = {
     isOpen: boolean;
@@ -34,11 +36,22 @@ export const useWindowMoments = (
         endsAt: null,
         position: null,
     });
+    const [deviceId, setDeviceId] = useState<string | null>(null);
 
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastWindowTimeRef = useRef<number>(0);
     const triggerDebounceRef = useRef<boolean>(false);
     const effectivePeerCountRef = useRef<number>(0);
+
+    // Convex mutation
+    const insertWindowMoment = useMutation(api.mutations.windowMoments.insertWindowMoment);
+
+    // Initialize device ID
+    useEffect(() => {
+        if (isConvexConfigured) {
+            getDeviceId().then(setDeviceId);
+        }
+    }, []);
 
     // Combined peer count: max of local proximity and realtime presence
     const effectivePeerCount = Math.max(localPeerCount, realtimePresenceCount);
@@ -78,27 +91,23 @@ export const useWindowMoments = (
             setWindowMoment(prev => ({ ...prev, isOpen: false }));
         }, durationMs);
 
-        // Save to Supabase if not demo
-        if (!isDemo && isSupabaseConfigured) {
-            const userId = await getCurrentUserId();
-            if (userId) {
-                const { error } = await supabase.from('window_moments').insert({
-                    started_at: new Date(now).toISOString(),
-                    ends_at: new Date(now + durationMs).toISOString(),
-                    position_x: position.x,
-                    position_y: position.y,
-                    triggered_by: userId,
-                    participant_count: effectivePeerCount,
+        // Save to Convex if not demo
+        if (!isDemo && isConvexConfigured && deviceId) {
+            try {
+                await insertWindowMoment({
+                    startedAt: now,
+                    endsAt: now + durationMs,
+                    positionX: position.x,
+                    positionY: position.y,
+                    triggeredBy: deviceId,
+                    participantCount: effectivePeerCount,
                 });
-
-                if (error) {
-                    console.warn('[WINDOW] Failed to save:', error.message);
-                } else {
-                    console.log('[WINDOW] Moment saved');
-                }
+                console.log('[WINDOW] Moment saved');
+            } catch (err) {
+                console.warn('[WINDOW] Failed to save:', err);
             }
         }
-    }, [effectivePeerCount]);
+    }, [deviceId, effectivePeerCount, insertWindowMoment]);
 
     const closeWindow = useCallback(() => {
         if (timeoutRef.current) {

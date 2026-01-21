@@ -9,7 +9,7 @@ import Animated, {
     Easing,
     interpolate,
 } from 'react-native-reanimated';
-import { Colors, Spacing, Layout } from '../constants/Theme';
+import { Colors, Spacing, Layout, Typography } from '../constants/Theme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface SkeletonProps {

@@ -91,11 +91,11 @@ const styles = StyleSheet.create({
     },
     count: {
         color: Colors.primary,
-        fontSize: 72,
-        fontWeight: '100',
+        fontSize: Typography.size.jumbo,
+        fontWeight: '200',
         fontVariant: ['tabular-nums'],
-        fontFamily: Typography.mono,
-        letterSpacing: -4,
+        fontFamily: Typography.sans,
+        letterSpacing: Typography.letterSpacing.tight,
     },
     countDistant: {
         color: Colors.tertiary,

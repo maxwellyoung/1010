@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useMutation, useQuery } from 'convex/react';
 import { useLocation } from '../context/LocationContext';
-import { supabase, isSupabaseConfigured, getCurrentUserId } from '../lib/supabase';
+import { isConvexConfigured, getDeviceId } from '../lib/convex';
+import { api } from '../../convex/_generated/api';
 import { DEFAULT_ZONE } from '../config/NetworkZones';
 import * as Crypto from 'expo-crypto';
 
@@ -35,21 +37,52 @@ export const useTrails = () => {
     const [historicTrails, setHistoricTrails] = useState<TrailPoint[][]>([]);
     const [isResonating, setIsResonating] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
+    const [deviceId, setDeviceId] = useState<string | null>(null);
     const sequenceRef = useRef(0);
     const lastPointRef = useRef<{ lat: number; lng: number } | null>(null);
 
-    // Generate session ID on mount
+    // Convex mutation
+    const insertTrailPoint = useMutation(api.mutations.trails.insertTrailPoint);
+
+    // Fetch historic trails
+    const since = Date.now() - HISTORIC_TRAIL_DAYS * 24 * 60 * 60 * 1000;
+    const historicTrailsData = useQuery(
+        api.queries.temporal.getTrailsInRange,
+        deviceId && sessionId && isConvexConfigured
+            ? { deviceId, since, excludeSessionId: sessionId }
+            : 'skip'
+    );
+
+    // Initialize device ID and session ID
     useEffect(() => {
-        const generateSessionId = async () => {
-            const id = await Crypto.randomUUID();
-            setSessionId(id);
+        const init = async () => {
+            if (isConvexConfigured) {
+                const id = await getDeviceId();
+                setDeviceId(id);
+            }
+            const sid = await Crypto.randomUUID();
+            setSessionId(sid);
         };
-        generateSessionId();
+        init();
     }, []);
+
+    // Process historic trails when data changes
+    useEffect(() => {
+        if (historicTrailsData && Array.isArray(historicTrailsData)) {
+            const trails = historicTrailsData.slice(-5).map((session) =>
+                session.points.map((p: { lat: number; lng: number; createdAt: number }) => ({
+                    x: lngToX(p.lng),
+                    y: latToY(p.lat),
+                    timestamp: p.createdAt,
+                }))
+            );
+            setHistoricTrails(trails);
+        }
+    }, [historicTrailsData]);
 
     // Add trail point
     const addTrailPoint = useCallback(async () => {
-        if (!location || !sessionId) return;
+        if (!location || !sessionId || !deviceId) return;
 
         const { latitude, longitude, accuracy } = location.coords;
         const now = Date.now();
@@ -78,72 +111,23 @@ export const useTrails = () => {
 
         lastPointRef.current = { lat: latitude, lng: longitude };
 
-        // Save to Supabase
-        if (isSupabaseConfigured) {
-            const userId = await getCurrentUserId();
-            if (userId) {
+        // Save to Convex
+        if (isConvexConfigured) {
+            try {
                 sequenceRef.current += 1;
-                const { error } = await supabase.from('trails').insert({
-                    profile_id: userId,
-                    session_id: sessionId,
+                await insertTrailPoint({
+                    deviceId,
+                    sessionId,
                     lat: latitude,
                     lng: longitude,
-                    accuracy,
+                    accuracy: accuracy || 0,
                     seq: sequenceRef.current,
                 });
-                if (error) {
-                    console.warn('[TRAIL] Insert failed:', error.message);
-                }
+            } catch (err) {
+                console.warn('[TRAIL] Insert failed:', err);
             }
         }
-    }, [location, sessionId]);
-
-    // Fetch historic trails
-    const fetchHistoricTrails = useCallback(async () => {
-        if (!isSupabaseConfigured) return;
-
-        const userId = await getCurrentUserId();
-        if (!userId) return;
-
-        try {
-            const since = new Date();
-            since.setDate(since.getDate() - HISTORIC_TRAIL_DAYS);
-
-            const { data, error } = await supabase
-                .from('trails')
-                .select('session_id, lat, lng, created_at, seq')
-                .eq('profile_id', userId)
-                .neq('session_id', sessionId) // Exclude current session
-                .gte('created_at', since.toISOString())
-                .order('session_id')
-                .order('seq');
-
-            if (error) {
-                console.warn('[TRAIL] Historic fetch failed:', error.message);
-                return;
-            }
-
-            if (data && data.length > 0) {
-                // Group by session
-                const sessions = new Map<string, TrailPoint[]>();
-                for (const row of data) {
-                    const points = sessions.get(row.session_id) || [];
-                    points.push({
-                        x: lngToX(row.lng),
-                        y: latToY(row.lat),
-                        timestamp: new Date(row.created_at).getTime(),
-                    });
-                    sessions.set(row.session_id, points);
-                }
-
-                // Take last 5 sessions
-                const trails = Array.from(sessions.values()).slice(-5);
-                setHistoricTrails(trails);
-            }
-        } catch (err) {
-            console.error('[TRAIL] Error fetching historic trails:', err);
-        }
-    }, [sessionId]);
+    }, [location, sessionId, deviceId, insertTrailPoint]);
 
     // Check for resonance (current path overlaps historic)
     const checkResonance = useCallback(() => {
@@ -170,7 +154,7 @@ export const useTrails = () => {
 
     // Track location when inside network
     useEffect(() => {
-        if (!isInsideNetwork || !sessionId) {
+        if (!isInsideNetwork || !sessionId || !deviceId) {
             return;
         }
 
@@ -181,14 +165,7 @@ export const useTrails = () => {
         const interval = setInterval(addTrailPoint, TRAIL_POINT_INTERVAL);
 
         return () => clearInterval(interval);
-    }, [isInsideNetwork, sessionId, addTrailPoint]);
-
-    // Fetch historic trails once on session start
-    useEffect(() => {
-        if (sessionId && isInsideNetwork) {
-            fetchHistoricTrails();
-        }
-    }, [sessionId, isInsideNetwork, fetchHistoricTrails]);
+    }, [isInsideNetwork, sessionId, deviceId, addTrailPoint]);
 
     // Check resonance when trail updates
     useEffect(() => {

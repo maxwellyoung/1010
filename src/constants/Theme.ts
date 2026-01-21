@@ -1,28 +1,30 @@
 export const Colors = {
-    background: '#050505', // Deep void
-    surface: '#111111', // Subtle separation
-    surfaceHighlight: '#1A1A1A',
-    surfaceElevated: '#222222', // Cards, modals
-    surfacePressed: '#0A0A0A', // Pressed states
+    // Refined dark palette - warm undertones
+    background: '#0A0A0A', // Soft black
+    surface: '#141414', // Subtle warmth
+    surfaceHighlight: '#1E1E1E',
+    surfaceElevated: '#262626', // Cards, modals
+    surfacePressed: '#0F0F0F', // Pressed states
 
-    // Transit / Terminal Palette
-    primary: '#E0E0E0', // High contrast text (Off-white)
-    secondary: '#888888', // Mid-grey for structure
-    tertiary: '#666666', // Improved contrast (4.5:1 ratio)
-    quaternary: '#444444', // Very subtle, decorative only
+    // Text hierarchy - warmer grays
+    primary: '#F5F5F5', // Near-white, readable
+    secondary: '#A3A3A3', // Warm mid-gray
+    tertiary: '#737373', // Supporting text
+    quaternary: '#525252', // Decorative, hints
 
-    // Accents (Soft Futurism)
-    accent: '#33FF00', // "Bio-digital" green (rare use)
-    accentDim: 'rgba(51, 255, 0, 0.15)', // Subtle accent glow
-    warning: '#FFAA00', // Amber
-    warningDim: 'rgba(255, 170, 0, 0.15)',
-    error: '#FF4444',
+    // Accent - refined teal (presence/connection feel)
+    accent: '#2DD4BF', // Soft teal - approachable, not sci-fi
+    accentDim: 'rgba(45, 212, 191, 0.12)',
+    accentMuted: 'rgba(45, 212, 191, 0.6)',
+    warning: '#F59E0B', // Warm amber
+    warningDim: 'rgba(245, 158, 11, 0.12)',
+    error: '#EF4444',
 
-    // Translucency
-    overlay: 'rgba(5, 5, 5, 0.9)',
-    overlayLight: 'rgba(5, 5, 5, 0.7)',
-    glass: 'rgba(255, 255, 255, 0.05)',
-    glassStrong: 'rgba(255, 255, 255, 0.1)',
+    // Translucency - softer overlays
+    overlay: 'rgba(10, 10, 10, 0.92)',
+    overlayLight: 'rgba(10, 10, 10, 0.75)',
+    glass: 'rgba(255, 255, 255, 0.04)',
+    glassStrong: 'rgba(255, 255, 255, 0.08)',
 };
 
 export const Spacing = {
@@ -36,31 +38,46 @@ export const Spacing = {
 };
 
 export const Typography = {
-    mono: 'SpaceMono', // Ensure this is loaded
+    // Primary font for UI
+    sans: 'Inter',
+    sansMedium: 'Inter-Medium',
+    sansSemiBold: 'Inter-SemiBold',
+    mono: 'SpaceMono', // Reserved for data/numbers only
     size: {
-        xs: 11,
-        sm: 13,
-        base: 15, // Body text
-        md: 17, // Emphasis
-        lg: 20, // Section headers
-        xl: 28, // Page titles
-        xxl: 40, // Hero text
-        jumbo: 72, // Full-screen glyphs
+        xs: 12,
+        sm: 14,
+        base: 16, // Body text
+        md: 18, // Emphasis
+        lg: 22, // Section headers
+        xl: 32, // Page titles
+        xxl: 48, // Hero text
+        jumbo: 80, // Full-screen moments
+    },
+    lineHeight: {
+        tight: 1.2,
+        normal: 1.5,
+        relaxed: 1.75,
+    },
+    weight: {
+        normal: '400' as const,
+        medium: '500' as const,
+        semibold: '600' as const,
     },
     letterSpacing: {
-        tight: -0.5,
+        tight: -0.3,
         normal: 0,
-        wide: 1,
-        wider: 2,
-        widest: 4, // Glyphs, labels
+        wide: 0.5,
+        wider: 1,
+        label: 1.5, // Labels, badges
     },
 };
 
 export const Layout = {
     radius: {
-        sm: 2,
-        md: 4,
-        lg: 12,
+        sm: 6,
+        md: 10,
+        lg: 16,
+        xl: 24,
         full: 9999,
     },
 };

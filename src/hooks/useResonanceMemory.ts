@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase, isSupabaseConfigured, getCurrentUserId } from '../lib/supabase';
+import { useQuery } from 'convex/react';
+import { isConvexConfigured, getDeviceId } from '../lib/convex';
+import { api } from '../../convex/_generated/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
@@ -23,13 +25,6 @@ export interface SignalMemory {
     lastEncounter: number;
     hasRitual: boolean;
     memoryLevel: MemoryLevel;
-}
-
-interface EncounterFrequency {
-    encounter_hash: string;
-    encounter_count: number;
-    last_encounter: string;
-    has_ritual: boolean;
 }
 
 const MEMORY_CACHE_KEY = '@network1010/resonance_memory';
@@ -64,6 +59,24 @@ export function useResonanceMemory() {
     const [memories, setMemories] = useState<Map<string, SignalMemory>>(new Map());
     const [isLoading, setIsLoading] = useState(true);
     const [lastSync, setLastSync] = useState<number | null>(null);
+    const [deviceId, setDeviceId] = useState<string | null>(null);
+
+    // Initialize device ID
+    useEffect(() => {
+        const init = async () => {
+            if (isConvexConfigured) {
+                const id = await getDeviceId();
+                setDeviceId(id);
+            }
+        };
+        init();
+    }, []);
+
+    // Convex query for encounter frequency
+    const encounterFrequency = useQuery(
+        api.queries.encounters.getEncounterFrequency,
+        deviceId && isConvexConfigured ? { deviceId } : 'skip'
+    );
 
     // Load cached memory on mount
     useEffect(() => {
@@ -90,68 +103,39 @@ export function useResonanceMemory() {
         loadCache();
     }, []);
 
-    // Sync with Supabase
-    const syncWithServer = useCallback(async () => {
-        if (!isSupabaseConfigured) return;
-
-        const userId = await getCurrentUserId();
-        if (!userId) return;
-
-        try {
-            // Fetch encounter frequencies where this user is involved
-            const { data, error } = await supabase
-                .from('encounter_frequency')
-                .select('*');
-
-            if (error) {
-                console.warn('[MEMORY] Sync failed:', error.message);
-                return;
-            }
-
-            if (data) {
-                const newMemories = new Map<string, SignalMemory>();
-
-                for (const freq of data as EncounterFrequency[]) {
-                    // Extract the other peer's ID from the hash
-                    const [idA, idB] = freq.encounter_hash.split('-');
-                    const peerId = idA === userId ? idB : idA;
-
-                    const memory: SignalMemory = {
-                        peerId,
-                        encounterCount: freq.encounter_count,
-                        lastEncounter: new Date(freq.last_encounter).getTime(),
-                        hasRitual: freq.has_ritual,
-                        memoryLevel: getMemoryLevel(freq.encounter_count),
-                    };
-
-                    newMemories.set(peerId, memory);
-                }
-
-                setMemories(newMemories);
-                setLastSync(Date.now());
-
-                // Cache for offline use
-                const cacheData = {
-                    data: Array.from(newMemories.values()),
-                    timestamp: Date.now(),
-                };
-                await AsyncStorage.setItem(MEMORY_CACHE_KEY, JSON.stringify(cacheData));
-
-                console.log('[MEMORY] Synced', newMemories.size, 'memories');
-            }
-        } catch (err) {
-            console.error('[MEMORY] Sync error:', err);
-        }
-    }, []);
-
-    // Sync on mount and periodically
+    // Process encounter frequency data from Convex
     useEffect(() => {
-        syncWithServer();
+        if (!encounterFrequency || !deviceId) return;
 
-        // Refresh every 5 minutes
-        const interval = setInterval(syncWithServer, 5 * 60 * 1000);
-        return () => clearInterval(interval);
-    }, [syncWithServer]);
+        const processData = async () => {
+            const newMemories = new Map<string, SignalMemory>();
+
+            for (const freq of encounterFrequency) {
+                const memory: SignalMemory = {
+                    peerId: freq.peerId,
+                    encounterCount: freq.encounterCount,
+                    lastEncounter: freq.lastEncounter,
+                    hasRitual: freq.hasRitual,
+                    memoryLevel: getMemoryLevel(freq.encounterCount),
+                };
+                newMemories.set(freq.peerId, memory);
+            }
+
+            setMemories(newMemories);
+            setLastSync(Date.now());
+
+            // Cache for offline use
+            const cacheData = {
+                data: Array.from(newMemories.values()),
+                timestamp: Date.now(),
+            };
+            await AsyncStorage.setItem(MEMORY_CACHE_KEY, JSON.stringify(cacheData));
+
+            console.log('[MEMORY] Synced', newMemories.size, 'memories');
+        };
+
+        processData();
+    }, [encounterFrequency, deviceId]);
 
     // Get memory for a specific peer
     const getMemory = useCallback((peerId: string): SignalMemory | null => {
@@ -195,6 +179,11 @@ export function useResonanceMemory() {
             newMap.set(peerId, updated);
             return newMap;
         });
+    }, []);
+
+    // Manual sync function (Convex auto-syncs, but keep for API compatibility)
+    const syncWithServer = useCallback(() => {
+        // Convex handles this automatically
     }, []);
 
     // Stats

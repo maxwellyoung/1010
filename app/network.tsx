@@ -13,7 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Constants
-import { Colors, Typography, Spacing } from '../src/constants/Theme';
+import { Colors, Typography, Spacing, Layout } from '../src/constants/Theme';
 import { Motion } from '../src/constants/Motion';
 import { Copy } from '../src/constants/Copy';
 
@@ -585,16 +585,17 @@ const styles = StyleSheet.create({
     presentationExit: {
         position: 'absolute',
         right: Spacing.lg,
-        paddingVertical: Spacing.xs,
-        paddingHorizontal: Spacing.sm,
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Layout.radius.md,
         borderWidth: 1,
-        borderColor: Colors.tertiary,
-        backgroundColor: 'rgba(5, 5, 5, 0.8)',
+        borderColor: Colors.quaternary,
+        backgroundColor: Colors.overlay,
     },
     presentationExitText: {
-        color: Colors.tertiary,
-        fontSize: Typography.size.xs,
-        letterSpacing: 2,
-        fontFamily: Typography.mono,
+        color: Colors.secondary,
+        fontSize: Typography.size.sm,
+        letterSpacing: Typography.letterSpacing.wide,
+        fontFamily: Typography.sansMedium,
     },
 });

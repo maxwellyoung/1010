@@ -9,7 +9,7 @@ import Animated, {
     useSharedValue,
     Easing,
 } from 'react-native-reanimated';
-import { Colors, Typography, Spacing } from '../../constants/Theme';
+import { Colors, Typography, Spacing, Layout } from '../../constants/Theme';
 
 /**
  * Network Header - Journey-inspired
@@ -88,25 +88,25 @@ const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
         marginBottom: Spacing.xl,
-        paddingTop: Spacing.md,
+        paddingTop: Spacing.lg,
     },
     title: {
         color: Colors.primary,
         fontSize: Typography.size.xxl,
-        fontWeight: '200',
-        letterSpacing: 16,
-        fontFamily: Typography.mono,
+        fontWeight: '300',
+        letterSpacing: 12,
+        fontFamily: Typography.sansMedium,
     },
     titleDistant: {
         color: Colors.tertiary,
     },
     windowIndicator: {
         position: 'absolute',
-        top: Spacing.md + 8,
+        top: Spacing.lg + 8,
         right: -Spacing.xl,
         width: 8,
         height: 8,
-        borderRadius: 4,
-        backgroundColor: Colors.warning,
+        borderRadius: Layout.radius.full,
+        backgroundColor: Colors.accent,
     },
 });

@@ -39,6 +39,9 @@
       "expo-router",
       "expo-font"
     ],
-    "scheme": "network-1010"
+    "scheme": "network-1010",
+    "extra": {
+      "convexUrl": "https://zany-spaniel-671.convex.cloud"
+    }
   }
 }

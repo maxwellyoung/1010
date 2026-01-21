@@ -1,77 +1,84 @@
 import { Easing } from 'react-native-reanimated';
 
 /**
- * Motion Hierarchy
+ * Motion System
  *
- * Inspired by Emil Kowalski's motion grammar:
- * - Background: Slow, ambient, barely noticeable
- * - Ambient: Medium-slow, creates atmosphere
- * - Interaction: Quick, responsive feedback
- * - Focus: Instant, micro-interactions
+ * Refined, organic motion that feels natural rather than technical.
+ * Inspired by midday.ai's smooth, purposeful transitions.
  */
 
 export const Motion = {
-    // Hierarchy durations (ms)
+    // Durations (ms) - slightly longer for smoother feel
     duration: {
-        instant: 80,
-        focus: 120,
+        instant: 100,
+        micro: 150,
+        fast: 200,
+        normal: 300,
+        slow: 450,
+        ambient: 2000,
+        background: 3500,
+        breath: 5000,
+        // Legacy aliases
+        focus: 150,
         interaction: 200,
         feedback: 300,
-        transition: 400,
-        ambient: 2400,
-        background: 4000,
-        breath: 6000,
+        transition: 450,
     },
 
-    // Stagger delays for choreography
+    // Stagger delays for graceful choreography
     stagger: {
-        micro: 30,
-        small: 50,
-        medium: 80,
-        large: 120,
+        micro: 40,
+        small: 60,
+        medium: 100,
+        large: 150,
     },
 
-    // Spring configs - reserved for rare cases where physics is truly needed
-    // Prefer withTiming with easing for most animations
+    // Spring configs - natural, organic feel
     spring: {
-        // Critically damped - no overshoot
-        snappy: { damping: 20, stiffness: 300 },
-        gentle: { damping: 20, stiffness: 150 },
-        slow: { damping: 25, stiffness: 80 },
+        // Quick but soft
+        snappy: { damping: 22, stiffness: 250, mass: 0.8 },
+        // Gentle settle
+        gentle: { damping: 18, stiffness: 120, mass: 1 },
+        // Slow, heavy presence
+        slow: { damping: 24, stiffness: 70, mass: 1.2 },
+        // Bouncy for playful moments
+        bouncy: { damping: 12, stiffness: 180, mass: 0.9 },
     },
 
-    // Easing presets - all smooth, no overshoot
+    // Easing - smooth curves
     easing: {
-        // For entries - decelerates into place
-        enter: Easing.out(Easing.cubic),
-        // For exits - accelerates away
-        exit: Easing.in(Easing.cubic),
-        // For continuous ambient loops
+        // Entries - soft deceleration
+        enter: Easing.bezier(0.25, 0.1, 0.25, 1),
+        // Exits - gentle acceleration
+        exit: Easing.bezier(0.4, 0, 0.2, 1),
+        // Standard ease
+        standard: Easing.bezier(0.4, 0, 0.2, 1),
+        // Ambient loops
         ambient: Easing.inOut(Easing.quad),
-        // For subtle breathing/pulsing
+        // Breathing/pulsing
         breath: Easing.inOut(Easing.sin),
     },
 
-    // Opacity values
+    // Opacity scale
     opacity: {
         invisible: 0,
-        ghost: 0.1,
-        faint: 0.2,
-        subtle: 0.4,
-        medium: 0.6,
-        strong: 0.8,
+        ghost: 0.08,
+        faint: 0.15,
+        subtle: 0.35,
+        medium: 0.55,
+        strong: 0.75,
         full: 1,
     },
 
-    // Scale values
+    // Scale values - more subtle
     scale: {
         hidden: 0,
-        compressed: 0.85,
+        compressed: 0.92,
         resting: 1,
-        hover: 1.02,
-        pressed: 0.96,
-        expanded: 1.08,
-        emphasis: 1.15,
+        hover: 1.015,
+        pressed: 0.98,
+        expanded: 1.04,
+        emphasis: 1.08,
     },
 } as const;
 
@@ -91,6 +98,14 @@ export const EntrySequence = {
  * View transition configuration
  */
 export const ViewTransition = {
-    duration: Motion.duration.transition,
+    duration: Motion.duration.slow,
     crossfade: true,
+} as const;
+
+// Legacy aliases for backward compatibility
+export const LegacyDuration = {
+    focus: Motion.duration.micro,
+    interaction: Motion.duration.fast,
+    feedback: Motion.duration.normal,
+    transition: Motion.duration.slow,
 } as const;

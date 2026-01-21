@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useMutation, useQuery } from 'convex/react';
 import { useLocation } from '../context/LocationContext';
-import { supabase, isSupabaseConfigured, getCurrentUserId } from '../lib/supabase';
+import { isConvexConfigured, getDeviceId } from '../lib/convex';
+import { api } from '../../convex/_generated/api';
 import { DEFAULT_ZONE, coordsToNormalized } from '../config/NetworkZones';
 
 export interface HeatPoint {
@@ -15,95 +17,74 @@ export const usePings = () => {
     const { isInsideNetwork, location } = useLocation();
     const [heatMap, setHeatMap] = useState<HeatPoint[]>([]);
     const [lastPingAt, setLastPingAt] = useState<number | null>(null);
+    const [deviceId, setDeviceId] = useState<string | null>(null);
     const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const heatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const sendPing = useCallback(async () => {
-        if (!isSupabaseConfigured || !location) {
-            return;
-        }
+    // Convex mutation for sending pings
+    const sendPingMutation = useMutation(api.mutations.pings.sendPing);
 
-        const userId = await getCurrentUserId();
-        if (!userId) {
-            console.warn('[PING] No user session');
+    // Get nearby presence using query (will auto-update)
+    const nearbyPresence = useQuery(
+        api.queries.presence.getNearbyPresence,
+        location && isConvexConfigured
+            ? {
+                  lat: location.coords.latitude,
+                  lng: location.coords.longitude,
+                  radiusKm: 0.5,
+              }
+            : 'skip'
+    );
+
+    // Initialize device ID
+    useEffect(() => {
+        if (isConvexConfigured) {
+            getDeviceId().then(setDeviceId);
+        }
+    }, []);
+
+    // Update heat map when presence data changes
+    useEffect(() => {
+        if (nearbyPresence && Array.isArray(nearbyPresence)) {
+            const points: HeatPoint[] = nearbyPresence.map((p) => {
+                const normalized = coordsToNormalized(p.lat, p.lng, DEFAULT_ZONE);
+                return {
+                    id: p.id,
+                    x: normalized.x,
+                    y: normalized.y,
+                    intensity: Math.max(0.3, p.intensity * (1 - (p.ageMinutes || 0) / 15)),
+                    ageMinutes: p.ageMinutes,
+                };
+            });
+            setHeatMap(points.slice(0, 12));
+        }
+    }, [nearbyPresence]);
+
+    const sendPing = useCallback(async () => {
+        if (!isConvexConfigured || !location || !deviceId) {
             return;
         }
 
         const { latitude, longitude } = location.coords;
 
         try {
-            // Insert ping for stats
-            const { error: pingError } = await supabase.from('pings').insert({
-                profile_id: userId,
+            await sendPingMutation({
+                deviceId,
                 postcode: '1010',
                 lat: latitude,
                 lng: longitude,
                 source: 'app',
             });
 
-            if (pingError) {
-                console.warn('[PING] Insert failed:', pingError.message);
-            }
-
-            // Upsert presence signal for heat map
-            const { error: presenceError } = await supabase.from('presence_signals').insert({
-                profile_id: userId,
-                lat: latitude,
-                lng: longitude,
-                intensity: 1.0,
-            });
-
-            if (presenceError) {
-                console.warn('[PING] Presence insert failed:', presenceError.message);
-            }
-
             setLastPingAt(Date.now());
             console.log('[PING] Sent presence ping');
         } catch (err) {
             console.error('[PING] Error:', err);
         }
-    }, [location]);
-
-    const fetchHeatMap = useCallback(async () => {
-        if (!isSupabaseConfigured || !location) {
-            return;
-        }
-
-        const { latitude, longitude } = location.coords;
-
-        try {
-            const { data, error } = await supabase.rpc('get_nearby_presence', {
-                user_lat: latitude,
-                user_lng: longitude,
-                radius_km: 0.5,
-            });
-
-            if (error) {
-                // Function might not exist yet
-                console.warn('[PING] Heat map query failed:', error.message);
-                return;
-            }
-
-            if (data && Array.isArray(data)) {
-                const points: HeatPoint[] = data.map((p: any) => {
-                    const normalized = coordsToNormalized(p.lat, p.lng, DEFAULT_ZONE);
-                    return {
-                        id: p.id,
-                        x: normalized.x,
-                        y: normalized.y,
-                        intensity: Math.max(0.3, p.intensity * (1 - (p.age_minutes || 0) / 15)),
-                        ageMinutes: p.age_minutes,
-                    };
-                });
-                setHeatMap(points.slice(0, 12));
-            }
-        } catch (err) {
-            console.error('[PING] Heat map error:', err);
-        }
-    }, [location]);
+    }, [location, deviceId, sendPingMutation]);
 
     useEffect(() => {
-        if (!isInsideNetwork) {
+        if (!isInsideNetwork || !deviceId) {
             if (pingIntervalRef.current) {
                 clearInterval(pingIntervalRef.current);
                 pingIntervalRef.current = null;
@@ -116,17 +97,11 @@ export const usePings = () => {
             return;
         }
 
-        // Initial ping and fetch
+        // Initial ping
         sendPing();
-        fetchHeatMap();
 
-        // Ping every 60 seconds, fetch heat map every 30 seconds
-        pingIntervalRef.current = setInterval(() => {
-            sendPing();
-            fetchHeatMap();
-        }, 60000);
-
-        heatIntervalRef.current = setInterval(fetchHeatMap, 30000);
+        // Ping every 60 seconds
+        pingIntervalRef.current = setInterval(sendPing, 60000);
 
         return () => {
             if (pingIntervalRef.current) {
@@ -138,7 +113,7 @@ export const usePings = () => {
                 heatIntervalRef.current = null;
             }
         };
-    }, [isInsideNetwork, sendPing, fetchHeatMap]);
+    }, [isInsideNetwork, deviceId, sendPing]);
 
     return { heatMap, lastPingAt, sendPing };
 };
