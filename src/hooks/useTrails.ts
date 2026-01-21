@@ -70,10 +70,10 @@ export const useTrails = () => {
     useEffect(() => {
         if (historicTrailsData && Array.isArray(historicTrailsData)) {
             const trails = historicTrailsData.slice(-5).map((session) =>
-                session.points.map((p: { lat: number; lng: number; createdAt: number }) => ({
+                session.points.map((p) => ({
                     x: lngToX(p.lng),
                     y: latToY(p.lat),
-                    timestamp: p.createdAt,
+                    timestamp: p.ts,
                 }))
             );
             setHistoricTrails(trails);
