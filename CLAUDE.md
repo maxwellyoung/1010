@@ -323,5 +323,5 @@ export default crons;
 ```
 
 ### URLs
+- Production: https://ideal-mandrill-244.convex.cloud
 - Development: https://zany-spaniel-671.convex.cloud
-- HTTP Actions: https://zany-spaniel-671.convex.site
