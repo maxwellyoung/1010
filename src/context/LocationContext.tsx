@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import * as Location from 'expo-location';
 import { DEFAULT_ZONE, isInsideZone } from '../config/NetworkZones';
 
@@ -12,97 +12,105 @@ interface LocationContextType {
 
 const LocationContext = createContext<LocationContextType | null>(null);
 
-// Stable references outside component to prevent re-creation
-let globalOverride: boolean | null = null;
-let hasInitialized = false;
-
 export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [location, setLocation] = useState<Location.LocationObject | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [isInsideNetwork, setIsInsideNetwork] = useState(false);
+
+    // Refs for stable references
+    const overrideRef = useRef<boolean | null>(null);
     const watchRef = useRef<Location.LocationSubscription | null>(null);
+    const hasInitializedRef = useRef(false);
 
-    // Store stable function refs
-    const stateRef = useRef({ setLocation, setErrorMsg, setIsInsideNetwork });
-    stateRef.current = { setLocation, setErrorMsg, setIsInsideNetwork };
+    // Stable setOverride function
+    const setOverride = useCallback((value: boolean | null) => {
+        overrideRef.current = value;
+        if (value !== null) {
+            setIsInsideNetwork(value);
+        }
+    }, []);
 
+    // Stable requestPermissions - no-op since we init on mount
+    const requestPermissions = useCallback(async () => {
+        // Location is initialized on mount, this is here for interface compatibility
+    }, []);
+
+    // Initialize location on mount
     useEffect(() => {
-        if (hasInitialized) return;
-        hasInitialized = true;
+        if (hasInitializedRef.current) return;
+        hasInitializedRef.current = true;
 
-        let mounted = true;
+        let isMounted = true;
 
-        const init = async () => {
+        const initLocation = async () => {
             try {
                 const { status } = await Location.requestForegroundPermissionsAsync();
-                if (!mounted) return;
+                if (!isMounted) return;
 
                 if (status !== 'granted') {
-                    stateRef.current.setErrorMsg('Permission denied');
+                    setErrorMsg('Permission denied');
                     return;
                 }
 
-                const loc = await Location.getCurrentPositionAsync({});
-                if (!mounted) return;
+                const currentLoc = await Location.getCurrentPositionAsync({});
+                if (!isMounted) return;
 
-                stateRef.current.setLocation(loc);
-                if (globalOverride === null) {
-                    stateRef.current.setIsInsideNetwork(
-                        isInsideZone(loc.coords.latitude, loc.coords.longitude, DEFAULT_ZONE)
+                setLocation(currentLoc);
+                if (overrideRef.current === null) {
+                    const inside = isInsideZone(
+                        currentLoc.coords.latitude,
+                        currentLoc.coords.longitude,
+                        DEFAULT_ZONE
                     );
+                    setIsInsideNetwork(inside);
                 }
 
-                const subscription = await Location.watchPositionAsync(
-                    { accuracy: Location.Accuracy.Balanced, timeInterval: 10000, distanceInterval: 20 },
+                // Start watching position
+                watchRef.current = await Location.watchPositionAsync(
+                    {
+                        accuracy: Location.Accuracy.Balanced,
+                        timeInterval: 10000,
+                        distanceInterval: 20
+                    },
                     (newLoc) => {
-                        if (!mounted) return;
-                        stateRef.current.setLocation(newLoc);
-                        if (globalOverride === null) {
-                            stateRef.current.setIsInsideNetwork(
-                                isInsideZone(newLoc.coords.latitude, newLoc.coords.longitude, DEFAULT_ZONE)
+                        if (!isMounted) return;
+                        setLocation(newLoc);
+                        if (overrideRef.current === null) {
+                            const inside = isInsideZone(
+                                newLoc.coords.latitude,
+                                newLoc.coords.longitude,
+                                DEFAULT_ZONE
                             );
+                            setIsInsideNetwork(inside);
                         }
                     }
                 );
-                watchRef.current = subscription;
             } catch (err) {
-                if (mounted) {
-                    stateRef.current.setErrorMsg('Location error');
+                if (isMounted) {
+                    setErrorMsg('Location error');
                 }
             }
         };
 
-        init();
+        initLocation();
 
         return () => {
-            mounted = false;
+            isMounted = false;
             watchRef.current?.remove();
         };
-    }, []); // Empty deps - runs once
+    }, []);
 
-    // Stable context value using refs for functions
-    const contextValue = useRef<LocationContextType>({
-        location: null,
-        errorMsg: null,
-        isInsideNetwork: false,
-        requestPermissions: async () => {
-            // Already initialized on mount, this is a no-op
-        },
-        setOverride: (value: boolean | null) => {
-            globalOverride = value;
-            if (value !== null) {
-                stateRef.current.setIsInsideNetwork(value);
-            }
-        },
-    });
-
-    // Update only the values, keep function references stable
-    contextValue.current.location = location;
-    contextValue.current.errorMsg = errorMsg;
-    contextValue.current.isInsideNetwork = isInsideNetwork;
+    // Memoize context value - only changes when state actually changes
+    const value = useMemo<LocationContextType>(() => ({
+        location,
+        errorMsg,
+        isInsideNetwork,
+        requestPermissions,
+        setOverride,
+    }), [location, errorMsg, isInsideNetwork, requestPermissions, setOverride]);
 
     return (
-        <LocationContext.Provider value={contextValue.current}>
+        <LocationContext.Provider value={value}>
             {children}
         </LocationContext.Provider>
     );
